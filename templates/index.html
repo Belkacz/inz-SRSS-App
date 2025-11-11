@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <title>SRSS Monitor</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #121212;
+      color: #eee;
+      margin: 0;
+      padding: 1em;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 1em;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 1em;
+      width: 95%;
+      max-width: 1400px;
+    }
+
+    .card {
+      background: #1e1e1e;
+      padding: 1.5em;
+      border-radius: 1em;
+      box-shadow: 0 0 10px rgba(0,0,0,0.4);
+    }
+
+    .alarm-on { color: #f55; font-weight: bold; }
+    .alarm-off { color: #5f5; font-weight: bold; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1em;
+      font-size: 0.9em;
+    }
+
+    th, td {
+      border-bottom: 1px solid #333;
+      padding: 0.4em;
+      text-align: left;
+    }
+
+    th {
+      background-color: #222;
+    }
+
+    .in { color: #5f5; }
+    .out { color: #f55; }
+
+    #video-container img {
+      width: 100%;
+      border-radius: 10px;
+      max-height: 500px;
+      object-fit: cover;
+    }
+
+    button {
+      background: #333;
+      color: #eee;
+      border: none;
+      padding: 0.5em 1em;
+      border-radius: 0.5em;
+      margin: 0.3em;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #555;
+    }
+
+    .arrow {
+      cursor: pointer;
+      width: 25px;
+      text-align: center;
+    }
+
+    .details-row td {
+      background-color: #2a2a2a;
+      font-size: 0.9em;
+      padding: 0.6em;
+    }
+
+    .details strong {
+      color: #bbb;
+    }
+
+    tr:hover {
+      background-color: #222;
+    }
+
+    @media (max-width: 1000px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>SRSS Monitoring</h1>
+
+  <div class="grid">
+    <!-- Lewa kolumna -->
+    <div class="card">
+      <h2>Lista użytkowników</h2>
+      <div>
+        <h3 class="in">Wewnątrz</h3>
+        <table id="users-in">
+          <thead>cc
+            <tr><th></th><th>Imię</th><th>Nazwisko</th><th>Karta</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+
+        <h3 class="out" style="margin-top: 1.5em;">Poza</h3>
+        <table id="users-out">
+          <thead>
+            <tr><th></th><th>Imię</th><th>Nazwisko</th><th>Karta</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <button onclick="fetchUsers()">🔄 Odśwież listę</button>
+    </div>
+
+
+    <!-- Środek -->
+    <div class="card">
+      <h2>PIR i Alarm</h2>
+      <div class="counter">PIR26: <span id="pir26">--</span></div>
+      <div class="counter">PIR16: <span id="pir16">--</span></div>
+
+      <div style="margin-top: 1em;">
+        <h3>Stan alarmu:</h3>
+        <div id="alarm" class="alarm-off">--</div>
+      </div>
+
+      <div style="margin-top: 1em;">
+        <h3>Odświeżenie za:</h3>
+        <div id="refresh">-- s</div>
+      </div>
+    </div>
+
+    <!-- Prawa kolumna -->
+    <div class="card">
+      <h2>Podgląd kamery</h2>
+      <button onclick="startStream()">▶️ Start</button>
+      <button onclick="stopStream()">⏹️ Stop</button>
+      <div id="video-container"></div>
+    </div>
+  </div>
+
+  <script>
+    let refreshTime = 60;
+
+    async function fetchData() {
+      try {
+        const res = await fetch("/api/status");
+        const data = await res.json();
+
+        document.getElementById("pir26").textContent = data.pir26Counter;
+        document.getElementById("pir16").textContent = data.pir16Counter;
+
+        const alarmEl = document.getElementById("alarm");
+        if (data.alarmStatus) {
+          alarmEl.textContent = "🔴 ALARM !!! ";
+          alarmEl.className = "alarm-on";
+        } else {
+          alarmEl.textContent = "🟢 OK ";
+          alarmEl.className = "alarm-off";
+        }
+
+        refreshTime = data.nextRefreshIn;
+      } catch (err) {
+        console.error("Błąd pobierania statusu:", err);
+      }
+
+      await fetchUsers();
+    }
+
+    async function fetchUsers() {
+      try {
+        const res = await fetch("/users");
+        const data = await res.json();
+
+        const usersInBody = document.querySelector("#users-in tbody");
+        const usersOutBody = document.querySelector("#users-out tbody");
+
+        usersInBody.innerHTML = "";
+        usersOutBody.innerHTML = "";
+
+        function createUserRow(u, tableBody) {
+          const mainRow = document.createElement("tr");
+          const detailsRow = document.createElement("tr");
+          detailsRow.classList.add("details-row");
+          detailsRow.style.display = "none";
+
+          mainRow.innerHTML = `
+            <td class="arrow">▶️</td>
+            <td>${u.first_name}</td>
+            <td>${u.second_name}</td>
+            <td>${u.card_number}</td>
+          `;
+
+          detailsRow.innerHTML = `
+            <td colspan="4" class="details">
+              <strong>Email:</strong> ${u.email ?? "—"}<br>
+              <strong>Supervisor:</strong> ${u.supervisor ?? "—"}
+            </td>
+          `;
+
+          mainRow.addEventListener("click", () => {
+            const open = detailsRow.style.display === "table-row";
+            detailsRow.style.display = open ? "none" : "table-row";
+            mainRow.querySelector(".arrow").textContent = open ? "▶️" : "🔽";
+          });
+
+          tableBody.appendChild(mainRow);
+          tableBody.appendChild(detailsRow);
+        }
+
+        data.users_in.forEach(u => createUserRow(u, usersInBody));
+        data.users_out.forEach(u => createUserRow(u, usersOutBody));
+
+      } catch (err) {
+        console.error("Błąd pobierania użytkowników:", err);
+      }
+    }
+
+    function countdown() {
+      document.getElementById("refresh").textContent = `${refreshTime}s`;
+      refreshTime--;
+      if (refreshTime <= 0) {
+        fetchData();
+      }
+    }
+
+    function startStream() {
+      document.getElementById('video-container').innerHTML =
+        '<img src="/video_feed" style="width:100%;border-radius:10px;">';
+    }
+
+    function stopStream() {
+      document.getElementById('video-container').innerHTML = '';
+    }
+
+    fetchData();
+    setInterval(countdown, 1000);
+  </script>
+</body>
+</html>
