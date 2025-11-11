@@ -1,8 +1,10 @@
-from ast import Dict, Tuple
+from typing import List, Dict, Tuple, Any 
+from dataclasses import dataclass
 import threading
 import queue
 import time
 from typing import Tuple, Dict, Any
+from matplotlib.pyplot import box
 import numpy as np
 import cv2
 import websocket
@@ -12,40 +14,53 @@ import cv2
 
 from cardModule import CardMonitor
 
+@dataclass
+class Box:
+    x1: int
+    y1: int
+    x2: int
+    y2: int
+    conf: float
+
 class FrameAnaylser:
         def __init__(self) -> None:
-            self.model = YOLO('yolov8n.pt')
+            self.model = YOLO('yolo11n.pt')
+            
+        def DrawBox(self, frame, boxes: List[Box], people_count):
+            line_poeple_size = 2
+            line_conf_size = 1
+            drawed_frame = frame.copy()
+            if(people_count > 0):
+                for idx, box in enumerate(boxes):
+                    cv2.rectangle(drawed_frame, (box.x1, box.y1), (box.x2, box.y2), (0, 255, 0), 1)
+                    cv2.putText(drawed_frame, f"conf: {box.conf:.2f}", (box.x1-10, box.y1-10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), line_conf_size)
+                # cv2.putText(drawed_frame, f"conf: {box.conf:.2f}", (10, 50),
+                #         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), line_conf_size)
+            cv2.putText(drawed_frame, f"Ludzi: {people_count}",
+                    (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), line_poeple_size)
+            # cv2.putText(drawed_frame, f"conf: {0.00}", (10, 50),
+            #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), line_conf_size)
+            return drawed_frame
 
         def FindPeople(self, frame) -> Tuple[Any, Dict[str, Any]]:
-            results = self.model(frame[..., ::-1], imgsz=640, conf=0.35, classes=[0], verbose=False)  # tylko "person"
+            results = self.model(frame[..., ::-1], imgsz=640, conf=0.25, classes=[0], verbose=False)
             detections = results[0].boxes
 
             people_count = len(detections)
-            analysed_frame = frame.copy()
             boxes_data = []
+            for detection in detections:
+                box = Box(0, 0, 0, 0, 0.00)
+                box.x1, box.y1, box.x2, box.y1 = map(int, detection.xyxy[0])
+                
+                box.conf = float(detection.conf[0])
+                boxes_data.append(box)
 
-            for box in detections:
-                x1, y1, x2, y2 = map(int, box.xyxy[0])
-                conf = float(box.conf[0])
-                boxes_data.append({
-                    'bbox': [x1, y1, x2, y2],
-                    'confidence': conf
-                })
-                cv2.rectangle(analysed_frame, (x1, y1), (x2, y2), (0, 255, 0), 1)
-                cv2.putText(analysed_frame, f"{conf:.2f}", (x1, y1 - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-
-            cv2.putText(analysed_frame, f"Ludzi: {people_count}",
-                        (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 1)
-            ret, buffer = cv2.imencode('.jpg', analysed_frame)
-            if ret:
-                with open("test1.jpg", "wb") as file:
-                    file.write(buffer.tobytes())
-            # info = {
-            #     'people_count': people_count,
-            #     'detections': boxes_data
-            # }
-            return analysed_frame, people_count
+            # ret, buffer = cv2.imencode('.jpg', analysed_frame)
+            # if ret:
+            #     with open("test1.jpg", "wb") as file:
+            #         file.write(buffer.tobytes())
+            return people_count, boxes_data
         
 class MotionDetector:
     def __init__(self, threshold=25, min_area=5000):
@@ -54,7 +69,7 @@ class MotionDetector:
         self.dead_zone = 30
 
     def detectMotion(self, frame, prev_frame):
-        # Upewnij się, że obie klatki mają ten sam rozmiar
+        # Usprawdzenie rozmiarów obu klatek
         if frame.shape != prev_frame.shape:
             prev_frame = cv2.resize(prev_frame, (frame.shape[1], frame.shape[0]))
 
@@ -64,12 +79,12 @@ class MotionDetector:
         prev_gray = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
         prev_gray = cv2.GaussianBlur(prev_gray, (21, 21), 0)
 
-        # różnica między bieżącą a poprzednią klatką
+        # różnica miedzy klatkami
         frame_delta = cv2.absdiff(prev_gray, gray)
         _, thresh = cv2.threshold(frame_delta, self.threshold, 255, cv2.THRESH_BINARY)
         thresh = cv2.dilate(thresh, None, iterations=2)
 
-        # znajdź kontury ruchu
+        # zznajdź ruch
         contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         motion_detected = False
@@ -77,18 +92,16 @@ class MotionDetector:
             if cv2.contourArea(contour) > self.min_area:
                 motion_detected = True
                 self.dead_zone = 15
-                (x, y, w, h) = cv2.boundingRect(contour)
-                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 1)
-                ret, buffer = cv2.imencode('.jpg', frame)
-                if ret:
-                    with open("test2.jpg", "wb") as file:
-                        file.write(buffer.tobytes())
+                # (x, y, w, h) = cv2.boundingRect(contour)
+                # cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 1)
+                # ret, buffer = cv2.imencode('.jpg', frame)
+                # if ret:
+                    # with open("test2.jpg", "wb") as file:
+                        # file.write(buffer.tobytes())
             else:
                 if self.dead_zone > 0:
                     motion_detected = True
                     self.dead_zone -= 1
-                
-
         return motion_detected
 
 
@@ -104,11 +117,17 @@ class CAMMonitor:
         self.active = True
         self.find_people = find_people
         self.detect_motion = detect_motion
-        self.anylase_frame = FrameAnaylser()
+        self.frame_analyser = FrameAnaylser()
         self.motion_detector = MotionDetector()
         self.stremed_frame = None
         self.motion_detected = False
-        self.people_detected = 0
+        self.people_count = 0
+        self.frame_counter = 0
+        self.anylyze_interval = 5
+        self.detection_boxes = []
+        placeholder_path = "stand_by.jpg"
+        self.placeholder_frame = cv2.imread(placeholder_path)
+        self.anylyze_interval = 10
 
     def startThread(self):
         self.thread.start()
@@ -133,24 +152,30 @@ class CAMMonitor:
                             if self.last_frame is not None:
                                 self.prev_frame = self.last_frame
                             self.last_frame = frame
-                            analysed_frame = None
                             if self.card_monitor.human_in and self.prev_frame is not None and self.find_people:
                                 self.motion_detected = self.motion_detector.detectMotion(self.last_frame, self.prev_frame)
-                                analysed_frame, self.people_detected = self.anylase_frame.FindPeople(frame)
-                            if analysed_frame is not None:
-                                self.stremed_frame = analysed_frame
+                                if self.frame_counter % self.anylyze_interval == 0:
+                                    self.people_count, self.detection_boxes, = self.frame_analyser.FindPeople(frame)
+
+                            if (self.people_count > 0 and len(self.detection_boxes) > 0):
+                                self.stremed_frame = self.frame_analyser.DrawBox(frame, self.detection_boxes, self.people_count)
                             else:
-                                self.stremed_frame = frame
+                                self.stremed_frame = self.frame_analyser.DrawBox(frame, [], 0)
+                            self.frame_counter += 1
+                            if self.frame_counter > 30:
+                                self.frame_counter = 0
+                            if self.card_monitor.human_in == False:
+                                self.people_count = 0
                         else:
-                            self.stremed_frame = None
+                            self.stremed_frame = self.placeholder_frame.copy()
                             print("[CAMMonitor] Nie udało się zdekodować klatki")
                     else:
-                        self.stremed_frame = None
+                        self.stremed_frame = self.placeholder_frame.copy()
                         print(f"[CAMMonitor] [RAW MSG] {msg}")
 
             except Exception as exeption:
                 print(f"[CAMMonitor] [BŁĄD] {exeption}, ponawiam połączenie za 5s...")
-                self.stremed_frame = None
+                self.stremed_frame = self.placeholder_frame.copy()
                 time.sleep(5)
 
     def get_frame(self):
@@ -164,22 +189,24 @@ class CAMMonitor:
             frame_to_stream = None
             
             # with self.frame_lock:
-            if self.stremed_frame is not None:
-                frame_to_stream = self.stremed_frame.copy()
-                no_frame_count = 0
-            else:
-                no_frame_count += 1
-                # Po 10 próbach (1 sekunda) użyj placeholder
-                if no_frame_count > 10:
-                    frame_to_stream = self.placeholder_frame.copy()
+            # if self.stremed_frame is not None:
+            #     frame_to_stream = self.stremed_frame.copy()
+            #     no_frame_count = 0
+            # else:
+            #     no_frame_count += 1
+            #     # Po 10 próbach (1 sekunda) użyj placeholder
+            #     if no_frame_count > 10:
+            #         frame_to_stream = self.placeholder_frame.copy()
             
             # Jeśli nadal nie ma klatki, czekaj krótko
-            if frame_to_stream is None:
+            if self.stremed_frame is None:
                 time.sleep(0.1)
                 continue
 
-            # Kodowanie do JPEG
-            ret, buffer = cv2.imencode('.jpg', frame_to_stream, 
+            # # Kodowanie do JPEG
+            # ret, buffer = cv2.imencode('.jpg', frame_to_stream, 
+            #                            [cv2.IMWRITE_JPEG_QUALITY, 80])
+            ret, buffer = cv2.imencode('.jpg', self.stremed_frame, 
                                        [cv2.IMWRITE_JPEG_QUALITY, 80])
             if not ret:
                 print("[CAMMonitor] Błąd kodowania klatki")
