@@ -1,4 +1,3 @@
-from ast import Num
 from numbers import Number
 from tkinter import NO
 from flask import Flask
