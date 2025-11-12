@@ -1,5 +1,4 @@
 from numbers import Number
-from tkinter import NO
 from flask import Flask
 from routes import register_routes
 from pirModule import PIRMonitor
