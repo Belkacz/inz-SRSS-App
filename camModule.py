@@ -24,53 +24,53 @@ class Box:
     conf: float
 
 class FrameAnaylser:
-        def __init__(self) -> None:
-            # self.hog = cv2.HOGDescriptor()
-            # self.hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
-            self.mp_pose = mp.solutions.pose
-            self.pose = self.mp_pose.Pose(
-                static_image_mode=False,
-                model_complexity=0,  # 0=lite, 1=full, 2=heavy
-                min_detection_confidence=0.5
-            )
+    # def __init__(self) -> None:
+        # self.hog = cv2.HOGDescriptor()
+        # self.hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
+        # self.mp_pose = mp.solutions.pose
+        # self.pose = self.mp_pose.Pose(
+        #     static_image_mode=False,
+        #     model_complexity=0,  # 0=lite, 1=full, 2=heavy
+        #     min_detection_confidence=0.5
+        # )
             
-        def DrawBox(self, frame, boxes: List[Box], people_count):
-            line_poeple_size = 2
-            line_conf_size = 1
-            drawed_frame = frame.copy()
-            if(people_count > 0):
-                for idx, box in enumerate(boxes):
-                    cv2.rectangle(drawed_frame, (box.x1, box.y1), (box.x2, box.y2), (0, 255, 0), 1)
-                    cv2.putText(drawed_frame, f"conf: {box.conf:.2f}", (box.x1-10, box.y1-10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), line_conf_size)
-                # cv2.putText(drawed_frame, f"conf: {box.conf:.2f}", (10, 50),
-                #         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), line_conf_size)
-            cv2.putText(drawed_frame, f"Ludzi: {people_count}",
-                    (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), line_poeple_size)
-            # cv2.putText(drawed_frame, f"conf: {0.00}", (10, 50),
-            #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), line_conf_size)
-            return drawed_frame
-        
-        def FindPeople(self, frame) -> Tuple[int, List[Box]]:
-            # MediaPipe używa RGB
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            results = self.pose.process(rgb_frame)
+    def DrawBox(self, frame, boxes: List[Box], people_count):
+        line_poeple_size = 2
+        line_conf_size = 1
+        drawed_frame = frame.copy()
+        if(people_count > 0):
+            for idx, box in enumerate(boxes):
+                cv2.rectangle(drawed_frame, (box.x1, box.y1), (box.x2, box.y2), (0, 255, 0), 1)
+                cv2.putText(drawed_frame, f"conf: {box.conf:.2f}", (box.x1-10, box.y1-10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), line_conf_size)
+            # cv2.putText(drawed_frame, f"conf: {box.conf:.2f}", (10, 50),
+            #         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), line_conf_size)
+        cv2.putText(drawed_frame, f"Ludzi: {people_count}",
+                (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), line_poeple_size)
+        # cv2.putText(drawed_frame, f"conf: {0.00}", (10, 50),
+        #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), line_conf_size)
+        return drawed_frame
+    
+        # def FindPeople(self, frame) -> Tuple[int, List[Box]]:
+        #     # MediaPipe używa RGB
+        #     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        #     results = self.pose.process(rgb_frame)
             
-            if results.pose_landmarks:
-                # Znajdź bounding box z landmarks
-                h, w = frame.shape[:2]
-                landmarks = results.pose_landmarks.landmark
+        #     if results.pose_landmarks:
+        #         # Znajdź bounding box z landmarks
+        #         h, w = frame.shape[:2]
+        #         landmarks = results.pose_landmarks.landmark
                 
-                x_coords = [lm.x * w for lm in landmarks]
-                y_coords = [lm.y * h for lm in landmarks]
+        #         x_coords = [lm.x * w for lm in landmarks]
+        #         y_coords = [lm.y * h for lm in landmarks]
                 
-                x1, y1 = int(min(x_coords)), int(min(y_coords))
-                x2, y2 = int(max(x_coords)), int(max(y_coords))
+        #         x1, y1 = int(min(x_coords)), int(min(y_coords))
+        #         x2, y2 = int(max(x_coords)), int(max(y_coords))
                 
-                box = Box(x1, y1, x2, y2, 0.9)
-                return 1, [box]
+        #         box = Box(x1, y1, x2, y2, 0.9)
+        #         return 1, [box]
             
-            return 0, []
+        #     return 0, []
         
         # def FindPeople(self, frame) -> Tuple[int, List[Box]]:
         #     try:
@@ -209,8 +209,8 @@ class CAMMonitor:
                             self.last_frame = frame
                             if self.card_monitor.human_in and self.prev_frame is not None and self.find_people:
                                 self.motion_detected = self.motion_detector.detectMotion(self.last_frame, self.prev_frame)
-                                if self.frame_counter % self.anylyze_interval == 0:
-                                    self.people_count, self.detection_boxes, = self.frame_analyser.FindPeople(frame)
+                                # if self.frame_counter % self.anylyze_interval == 0:
+                                    # self.people_count, self.detection_boxes, = self.frame_analyser.FindPeople(frame)
 
                             if (self.people_count > 0 and len(self.detection_boxes) > 0):
                                 self.stremed_frame = self.frame_analyser.DrawBox(frame, self.detection_boxes, self.people_count)
