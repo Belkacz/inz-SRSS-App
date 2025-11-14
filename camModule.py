@@ -11,6 +11,7 @@ import websocket
 from flask import Flask, Response
 from ultralytics import YOLO
 import cv2
+import mediapipe as mp
 
 from cardModule import CardMonitor
 
@@ -24,7 +25,14 @@ class Box:
 
 class FrameAnaylser:
         def __init__(self) -> None:
-            self.model = YOLO('yolo11n.pt')
+            # self.hog = cv2.HOGDescriptor()
+            # self.hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
+            self.mp_pose = mp.solutions.pose
+            self.pose = self.mp_pose.Pose(
+                static_image_mode=False,
+                model_complexity=0,  # 0=lite, 1=full, 2=heavy
+                min_detection_confidence=0.5
+            )
             
         def DrawBox(self, frame, boxes: List[Box], people_count):
             line_poeple_size = 2
@@ -42,25 +50,72 @@ class FrameAnaylser:
             # cv2.putText(drawed_frame, f"conf: {0.00}", (10, 50),
             #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), line_conf_size)
             return drawed_frame
-
-        def FindPeople(self, frame) -> Tuple[Any, Dict[str, Any]]:
-            results = self.model(frame[..., ::-1], imgsz=640, conf=0.25, classes=[0], verbose=False)
-            detections = results[0].boxes
-
-            people_count = len(detections)
-            boxes_data = []
-            for detection in detections:
-                box = Box(0, 0, 0, 0, 0.00)
-                box.x1, box.y1, box.x2, box.y1 = map(int, detection.xyxy[0])
+        
+        def FindPeople(self, frame) -> Tuple[int, List[Box]]:
+            # MediaPipe używa RGB
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            results = self.pose.process(rgb_frame)
+            
+            if results.pose_landmarks:
+                # Znajdź bounding box z landmarks
+                h, w = frame.shape[:2]
+                landmarks = results.pose_landmarks.landmark
                 
-                box.conf = float(detection.conf[0])
-                boxes_data.append(box)
+                x_coords = [lm.x * w for lm in landmarks]
+                y_coords = [lm.y * h for lm in landmarks]
+                
+                x1, y1 = int(min(x_coords)), int(min(y_coords))
+                x2, y2 = int(max(x_coords)), int(max(y_coords))
+                
+                box = Box(x1, y1, x2, y2, 0.9)
+                return 1, [box]
+            
+            return 0, []
+        
+        # def FindPeople(self, frame) -> Tuple[int, List[Box]]:
+        #     try:
+        #         # Opcjonalnie zmniejsz rozdzielczość dla szybkości
+        #         # frame = cv2.resize(frame, (640, 480))
+                
+        #         (rects, weights) = self.hog.detectMultiScale(
+        #             frame,
+        #             winStride=(8, 8),
+        #             padding=(4, 4),
+        #             scale=1.05,
+        #             useMeanshiftGrouping=True
+        #         )
+                
+        #         boxes_data = []
+        #         for i, (x, y, w, h) in enumerate(rects):
+        #             # Filtruj słabe detekcje
+        #             if weights[i] > 0.2:
+        #                 box = Box(x, y, x + w, y + h, float(weights[i]))
+        #                 boxes_data.append(box)
+                
+        #         return len(boxes_data), boxes_data
+                
+        #     except Exception as e:
+        #         print(f"[FrameAnalyser] Błąd detekcji: {e}", flush=True)
+        #         return 0, []
 
-            # ret, buffer = cv2.imencode('.jpg', analysed_frame)
-            # if ret:
-            #     with open("test1.jpg", "wb") as file:
-            #         file.write(buffer.tobytes())
-            return people_count, boxes_data
+        # def FindPeople(self, frame) -> Tuple[Any, Dict[str, Any]]:
+        #     results = self.model(frame[..., ::-1], imgsz=640, conf=0.25, classes=[0], verbose=False)
+        #     detections = results[0].boxes
+
+        #     people_count = len(detections)
+        #     boxes_data = []
+        #     for detection in detections:
+        #         box = Box(0, 0, 0, 0, 0.00)
+        #         box.x1, box.y1, box.x2, box.y1 = map(int, detection.xyxy[0])
+                
+        #         box.conf = float(detection.conf[0])
+        #         boxes_data.append(box)
+
+        #     # ret, buffer = cv2.imencode('.jpg', analysed_frame)
+        #     # if ret:
+        #     #     with open("test1.jpg", "wb") as file:
+        #     #         file.write(buffer.tobytes())
+        #     return people_count, boxes_data
         
 class MotionDetector:
     def __init__(self, threshold=25, min_area=5000):
