@@ -11,7 +11,7 @@ import websocket
 from flask import Flask, Response
 # from ultralytics import YOLO
 # import cv2
-import mediapipe as mp
+# import mediapipe as mp
 
 from cardModule import CardMonitor
 
