@@ -32,13 +32,32 @@ class User(BaseSQL):
         return f"<User {self.first_name} {self.second_name} ({self.card_number})>"
 
 class UserHandler:
-    def __init__(self, db_url: str):
-        self.engine = create_engine(db_url)
+    # def __init__(self, db_url: str):
+        # self.engine = create_engine(db_url)
 
     def get_users(self):
-        with Session(self.engine) as session:
-            return session.query(User).all()
-        
+        # with Session(self.engine) as session:
+        #     return session.query(User).all()
+        return [
+            User(
+                id=1,
+                card_number=1111,
+                first_name=self.hash_str("Jan"),
+                second_name=self.hash_str("Kowalski"),
+                email=self.hash_str("jan.kowalski@example.com"),
+                supervisor=self.hash_str("Manager1"),
+                privilage_id_fk=1
+            ),
+            User(
+                id=2,
+                card_number=2222,
+                first_name=self.hash_str("Adam"),
+                second_name=self.hash_str("Nowak"),
+                email=self.hash_str("adam.nowak@example.com"),
+                supervisor=self.hash_str("Manager2"),
+                privilage_id_fk=2
+            ),
+        ]
     # def crete_unknow_users(self, card_list, users_list):
     #     found_cards = []
     #     unknown_users = []
