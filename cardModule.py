@@ -32,8 +32,8 @@ class User(BaseSQL):
         return f"<User {self.first_name} {self.second_name} ({self.card_number})>"
 
 class UserHandler:
-    # def __init__(self, db_url: str):
-        # self.engine = create_engine(db_url)
+    def __init__(self, db_url: str):
+        self.engine = create_engine(db_url)
 
     def get_users(self):
         # with Session(self.engine) as session:
