@@ -9,8 +9,8 @@ import numpy as np
 import cv2
 import websocket
 from flask import Flask, Response
-from ultralytics import YOLO
-import cv2
+# from ultralytics import YOLO
+# import cv2
 import mediapipe as mp
 
 from cardModule import CardMonitor
