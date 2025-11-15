@@ -209,8 +209,8 @@ class CAMMonitor:
                             self.last_frame = frame
                             if self.card_monitor.human_in and self.prev_frame is not None and self.find_people:
                                 self.motion_detected = self.motion_detector.detectMotion(self.last_frame, self.prev_frame)
-                                # if self.frame_counter % self.anylyze_interval == 0:
-                                    # self.people_count, self.detection_boxes, = self.frame_analyser.FindPeople(frame)
+                                if self.frame_counter % self.anylyze_interval == 0:
+                                    self.people_count, self.detection_boxes, = self.frame_analyser.FindPeople(frame)
 
                             if (self.people_count > 0 and len(self.detection_boxes) > 0):
                                 self.stremed_frame = self.frame_analyser.DrawBox(frame, self.detection_boxes, self.people_count)
