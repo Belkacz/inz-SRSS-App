@@ -8,7 +8,7 @@ import numpy as np
 import cv2
 import websocket
 from flask import Flask, Response
-from ultralytics import YOLO
+# from ultralytics import YOLO
 import cv2
 from typing import List
 from sqlalchemy import BigInteger, create_engine, String, Integer, ForeignKey
