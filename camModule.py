@@ -24,15 +24,15 @@ class Box:
     conf: float
 
 class FrameAnaylser:
-    # def __init__(self) -> None:
+    def __init__(self) -> None:
         # self.hog = cv2.HOGDescriptor()
         # self.hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
-        # self.mp_pose = mp.solutions.pose
-        # self.pose = self.mp_pose.Pose(
-        #     static_image_mode=False,
-        #     model_complexity=0,  # 0=lite, 1=full, 2=heavy
-        #     min_detection_confidence=0.5
-        # )
+        self.mp_pose = mp.solutions.pose
+        self.pose = self.mp_pose.Pose(
+            static_image_mode=False,
+            model_complexity=0,  # 0=lite, 1=full, 2=heavy
+            min_detection_confidence=0.5
+        )
             
     def DrawBox(self, frame, boxes: List[Box], people_count):
         line_poeple_size = 2
@@ -51,26 +51,26 @@ class FrameAnaylser:
         #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), line_conf_size)
         return drawed_frame
     
-        # def FindPeople(self, frame) -> Tuple[int, List[Box]]:
-        #     # MediaPipe używa RGB
-        #     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        #     results = self.pose.process(rgb_frame)
+        def FindPeople(self, frame) -> Tuple[int, List[Box]]:
+            # MediaPipe używa RGB
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            results = self.pose.process(rgb_frame)
             
-        #     if results.pose_landmarks:
-        #         # Znajdź bounding box z landmarks
-        #         h, w = frame.shape[:2]
-        #         landmarks = results.pose_landmarks.landmark
+            if results.pose_landmarks:
+                # Znajdź bounding box z landmarks
+                h, w = frame.shape[:2]
+                landmarks = results.pose_landmarks.landmark
                 
-        #         x_coords = [lm.x * w for lm in landmarks]
-        #         y_coords = [lm.y * h for lm in landmarks]
+                x_coords = [lm.x * w for lm in landmarks]
+                y_coords = [lm.y * h for lm in landmarks]
                 
-        #         x1, y1 = int(min(x_coords)), int(min(y_coords))
-        #         x2, y2 = int(max(x_coords)), int(max(y_coords))
+                x1, y1 = int(min(x_coords)), int(min(y_coords))
+                x2, y2 = int(max(x_coords)), int(max(y_coords))
                 
-        #         box = Box(x1, y1, x2, y2, 0.9)
-        #         return 1, [box]
+                box = Box(x1, y1, x2, y2, 0.9)
+                return 1, [box]
             
-        #     return 0, []
+            return 0, []
         
         # def FindPeople(self, frame) -> Tuple[int, List[Box]]:
         #     try:
