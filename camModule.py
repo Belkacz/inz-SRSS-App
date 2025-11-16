@@ -5,13 +5,13 @@ import queue
 import time
 from typing import Tuple, Dict, Any
 from matplotlib.pyplot import box
+import mediapipe
 import numpy as np
 import cv2
 import websocket
 from flask import Flask, Response
 from ultralytics import YOLO
 import cv2
-
 from cardModule import CardMonitor
 
 @dataclass
@@ -23,44 +23,68 @@ class Box:
     conf: float
 
 class FrameAnaylser:
-        def __init__(self) -> None:
-            self.model = YOLO('yolo11n.pt')
+    def __init__(self) -> None:
+        self.mp_pose = mediapipe.solutions.pose
+        self.pose = self.mp_pose.Pose(
+            static_image_mode=False,
+            model_complexity=0,  # 0=lite, 1=full, 2=heavy
+            min_detection_confidence=0.5
+        )
+
+    def DrawBox(self, frame, boxes: List[Box], people_count):
+        line_poeple_size = 2
+        line_conf_size = 1
+        drawed_frame = frame.copy()
+        if(people_count > 0):
+            for idx, box in enumerate(boxes):
+                cv2.rectangle(drawed_frame, (box.x1, box.y1), (box.x2, box.y2), (0, 255, 0), 1)
+                cv2.putText(drawed_frame, f"conf: {box.conf:.2f}", (box.x1-10, box.y1-10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), line_conf_size)
+            # cv2.putText(drawed_frame, f"conf: {box.conf:.2f}", (10, 50),
+            #         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), line_conf_size)
+        cv2.putText(drawed_frame, f"Ludzi: {people_count}",
+                (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), line_poeple_size)
+        # cv2.putText(drawed_frame, f"conf: {0.00}", (10, 50),
+        #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), line_conf_size)
+        return drawed_frame
+    
+    def FindPeople(self, frame) -> Tuple[int, List[Box]]:
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = self.pose.process(rgb_frame)
+        
+        if results.pose_landmarks:
+            h, w = frame.shape[:2]
+            landmarks = results.pose_landmarks.landmark
             
-        def DrawBox(self, frame, boxes: List[Box], people_count):
-            line_poeple_size = 2
-            line_conf_size = 1
-            drawed_frame = frame.copy()
-            if(people_count > 0):
-                for idx, box in enumerate(boxes):
-                    cv2.rectangle(drawed_frame, (box.x1, box.y1), (box.x2, box.y2), (0, 255, 0), 1)
-                    cv2.putText(drawed_frame, f"conf: {box.conf:.2f}", (box.x1-10, box.y1-10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), line_conf_size)
-                # cv2.putText(drawed_frame, f"conf: {box.conf:.2f}", (10, 50),
-                #         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), line_conf_size)
-            cv2.putText(drawed_frame, f"Ludzi: {people_count}",
-                    (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), line_poeple_size)
-            # cv2.putText(drawed_frame, f"conf: {0.00}", (10, 50),
-            #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), line_conf_size)
-            return drawed_frame
+            x_coords = [lm.x * w for lm in landmarks]
+            y_coords = [lm.y * h for lm in landmarks]
+            
+            x1, y1 = int(min(x_coords)), int(min(y_coords))
+            x2, y2 = int(max(x_coords)), int(max(y_coords))
+            
+            box = Box(x1, y1, x2, y2, 0.9)
+            return 1, [box]
 
-        def FindPeople(self, frame) -> Tuple[Any, Dict[str, Any]]:
-            results = self.model(frame[..., ::-1], imgsz=640, conf=0.25, classes=[0], verbose=False)
-            detections = results[0].boxes
+        return 0, []
 
-            people_count = len(detections)
-            boxes_data = []
-            for detection in detections:
-                box = Box(0, 0, 0, 0, 0.00)
-                box.x1, box.y1, box.x2, box.y1 = map(int, detection.xyxy[0])
+        # def FindPeople(self, frame) -> Tuple[Any, Dict[str, Any]]:
+        #     results = self.model(frame[..., ::-1], imgsz=640, conf=0.25, classes=[0], verbose=False)
+        #     detections = results[0].boxes
+
+        #     people_count = len(detections)
+        #     boxes_data = []
+        #     for detection in detections:
+        #         box = Box(0, 0, 0, 0, 0.00)
+        #         box.x1, box.y1, box.x2, box.y1 = map(int, detection.xyxy[0])
                 
-                box.conf = float(detection.conf[0])
-                boxes_data.append(box)
+        #         box.conf = float(detection.conf[0])
+        #         boxes_data.append(box)
 
-            # ret, buffer = cv2.imencode('.jpg', analysed_frame)
-            # if ret:
-            #     with open("test1.jpg", "wb") as file:
-            #         file.write(buffer.tobytes())
-            return people_count, boxes_data
+        #     # ret, buffer = cv2.imencode('.jpg', analysed_frame)
+        #     # if ret:
+        #     #     with open("test1.jpg", "wb") as file:
+        #     #         file.write(buffer.tobytes())
+        #     return people_count, boxes_data
         
 class MotionDetector:
     def __init__(self, threshold=25, min_area=5000):
@@ -123,7 +147,7 @@ class CAMMonitor:
         self.motion_detected = False
         self.people_count = 0
         self.frame_counter = 0
-        self.anylyze_interval = 5
+        self.anylyze_interval = 10
         self.detection_boxes = []
         placeholder_path = "stand_by.jpg"
         self.placeholder_frame = cv2.imread(placeholder_path)
