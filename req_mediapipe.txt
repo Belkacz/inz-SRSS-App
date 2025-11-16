@@ -1,0 +1,10 @@
+Flask
+matplotlib
+pydantic
+pydantic-settings
+PyMySQL
+python-dotenv
+SQLAlchemy
+typing-extensions
+websocket-client
+mediapipe
