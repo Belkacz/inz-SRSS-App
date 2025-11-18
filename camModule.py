@@ -1,15 +1,10 @@
-from typing import List, Dict, Tuple, Any 
+from typing import List, Tuple
 from dataclasses import dataclass
 import threading
-import queue
 import time
-from typing import Tuple, Dict, Any
-from matplotlib.pyplot import box
 import numpy as np
 import cv2
 import websocket
-from flask import Flask, Response
-# from ultralytics import YOLO
 import mediapipe
 
 from cardModule import CardMonitor
@@ -22,18 +17,204 @@ class Box:
     y2: int
     conf: float
 
-class FrameAnaylser:
+PERSON_COLORS = [
+        (0, 255, 0),   # zielony – osoba 1
+        (0, 0, 255),   # czerwony – osoba 2
+        (255, 0, 0)    # niebieski – osoba 3
+    ]
+class FrameAnalyser:
     def __init__(self) -> None:
-        # self.model = YOLO('yolo11n.pt')
-
-        # self.hog = cv2.HOGDescriptor()
-        # self.hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
         self.mp_pose = mediapipe.solutions.pose
         self.pose = self.mp_pose.Pose(
             static_image_mode=False,
-            model_complexity=0,  # 0=lite, 1=full, 2=heavy
+            model_complexity=0,
             min_detection_confidence=0.5
         )
+        self.max_people = 3  # Maksymalnie szukaj 3 osób
+        # print("[FrameAnalyser] MediaPipe Pose zainicjalizowany", flush=True)
+        # self.bg_sub = cv2.createBackgroundSubtractorMOG2(
+        #     history=50,         # Krótsze
+        #     varThreshold=30,     # Trochę wyższe
+        #     detectShadows=False
+        # )
+        # self.min_area = 3000
+        
+    # def FindPeople(self, frame) -> Tuple[int, List[Box]]:
+    #     try:
+    #         # KLUCZOWE: learningRate bardzo niskie
+    #         fg_mask = self.bg_sub.apply(frame, learningRate=0.001)
+            
+    #         cv2.imwrite("debug_01_mask_raw.jpg", fg_mask)
+            
+    #         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    #         fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_OPEN, kernel)
+    #         cv2.imwrite("debug_02_mask_open.jpg", fg_mask)
+            
+    #         fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, kernel)
+    #         cv2.imwrite("debug_03_mask_final.jpg", fg_mask)
+            
+    #         masked_frame = cv2.bitwise_and(frame, frame, mask=fg_mask)
+    #         cv2.imwrite("debug_04_masked_frame.jpg", masked_frame)
+            
+    #         contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, 
+    #                                       cv2.CHAIN_APPROX_SIMPLE)
+            
+    #         debug_contours = frame.copy()
+    #         cv2.drawContours(debug_contours, contours, -1, (0, 255, 0), 2)
+    #         cv2.imwrite("debug_05_contours.jpg", debug_contours)
+            
+    #         boxes_data = []
+    #         for contour in contours:
+    #             area = cv2.contourArea(contour)
+                
+    #             if area > self.min_area:
+    #                 x, y, w, h = cv2.boundingRect(contour)
+    #                 aspect_ratio = h / w if w > 0 else 0
+                    
+    #                 if 1.2 < aspect_ratio < 5.0:
+    #                     box = Box(x, y, x+w, y+h, 0.8)
+    #                     boxes_data.append(box)
+            
+    #         debug_final = frame.copy()
+    #         for box in boxes_data:
+    #             cv2.rectangle(debug_final, (box.x1, box.y1), (box.x2, box.y2), 
+    #                         (0, 255, 0), 2)
+    #         cv2.imwrite("debug_06_final_boxes.jpg", debug_final)
+            
+    #         print(f"[FrameAnalyser] BG Sub wykrył {len(boxes_data)} osób", flush=True)
+    #         return len(boxes_data), boxes_data
+            
+    #     except Exception as e:
+    #         print(f"[FrameAnalyser] BŁĄD: {e}", flush=True)
+    #         return 0, []
+
+    def erase_person_ellipse(self, img, pt1, pt2, color, thickness=-1):
+        x1, y1 = pt1
+        x2, y2 = pt2
+        width = x2 - x1
+        height = y2 - y1
+        expand_width = int(0.3 * width)
+        expand_height = int(0.3 * height)
+        x1_new = max(0, x1 - expand_width)
+        x2_new = min(img.shape[1], x2 + expand_width)
+        y1_new = max(0, y1 - expand_height)
+        y2_new = min(img.shape[0], y2 + expand_height)
+
+        # Środek elipsy
+        center = ((x1_new + x2_new) // 2, (y1_new + y2_new) // 2)
+
+        # Półosie
+        axes = ((x2_new - x1_new) // 2, (y2_new - y1_new) // 2)
+
+        # Kąt obrotu
+        angle = 0
+
+        # Rysowanie elipsy
+        cv2.ellipse(img, center, axes, angle, 0, 360, color, thickness)
+        return img
+
+    def erase_person(self, img, pt1, pt2):
+        x1, y1 = pt1
+        x2, y2 = pt2
+        
+        h, w = img.shape[:2]
+        width = x2 - x1
+        height = y2 - y1
+        
+        # DUŻY MARGINES - 60%
+        margin_x = int(0.2 * width)
+        margin_y = int(0.2 * height)
+        
+        x1_new = max(0, x1 - margin_x)
+        x2_new = min(w, x2 + margin_x)
+        y1_new = max(0, y1 - margin_y)
+        y2_new = min(h, y2 + margin_y)
+        
+        # Czarny prostokąt
+        cv2.rectangle(img, (x1_new, y1_new), (x2_new, y2_new), (0, 0, 0), -1)
+        return img
+
+    def FindPeople(self, frame) -> Tuple[int, List[Box]]:
+        try:
+            boxes_data = []
+            working_frame = frame.copy()
+            h, w = frame.shape[:2]
+            
+            min_box_area = 8000  # Minimalna powierzchnia (odrzuć małe fragmenty)
+            min_visibility = 60  # Minimalna visibility w %
+            
+            for iteration in range(self.max_people):
+                # Debug
+                if iteration == 0:
+                    cv2.imwrite("debug_working_frame_iter0.jpg", working_frame)
+                
+                # MediaPipe
+                rgb_frame = cv2.cvtColor(working_frame, cv2.COLOR_BGR2RGB)
+                results = self.pose.process(rgb_frame)
+
+                if results.pose_landmarks:
+                    landmarks = results.pose_landmarks.landmark
+
+                    x_coords = []
+                    y_coords = []
+                    visibility_sum = 0
+                    landmarks_counter = 0
+
+                    # Zbierz współrzędne
+                    for landmark in landmarks:
+                        x = int(landmark.x * w)
+                        y = int(landmark.y * h)
+                        vis = landmark.visibility if landmark.visibility is not None else 0
+
+                        x_coords.append(x)
+                        y_coords.append(y)
+                        visibility_sum += vis
+                        landmarks_counter += 1
+
+                    # Bounding box
+                    x1 = int(max(0, min(x_coords)))
+                    y1 = int(max(0, min(y_coords)))
+                    x2 = int(min(w, max(x_coords)))
+                    y2 = int(min(h, max(y_coords)))
+
+                    # FILTR 1: Powierzchnia boxa
+                    box_area = (x2 - x1) * (y2 - y1)
+                    if box_area < min_box_area:
+                        print(f"[FrameAnalyser] ✗ Odrzucono iter {iteration+1}: za mały box ({box_area} px < {min_box_area})", flush=True)
+                        break
+
+                    # FILTR 2: Visibility
+                    visibility_percent = (visibility_sum / landmarks_counter * 100) if landmarks_counter > 0 else 0
+                    if visibility_percent < min_visibility:
+                        print(f"[FrameAnalyser] ✗ Odrzucono iter {iteration+1}: niska visibility ({visibility_percent:.1f}% < {min_visibility}%)", flush=True)
+                        break
+                    
+                    # Dodaj box
+                    box = Box(x1, y1, x2, y2, visibility_percent)
+                    boxes_data.append(box)
+
+                    print(f"[FrameAnalyser] ✓ Osoba #{iteration+1}: area={box_area}px, vis={visibility_percent:.1f}%", flush=True)
+
+                    # WYMAŻ z dużym marginesem
+                    working_frame = self.erase_person(working_frame, (x1, y1), (x2, y2))
+                    # working_frame = self.erase_person_ellipse(working_frame, (x1, y1), (x2, y2), (0, 0, 0), thickness=-1)
+                    
+                    # Debug
+                    cv2.imwrite(f"debug_after_erase_person{iteration+1}.jpg", working_frame)
+                    
+                else:
+                    print(f"[FrameAnalyser] ✗ Nie znaleziono więcej osób po {iteration} iteracjach", flush=True)
+                    break
+            
+            print(f"[FrameAnalyser] Wykryto łącznie {len(boxes_data)} osób\n", flush=True)
+            return len(boxes_data), boxes_data
+            
+        except Exception as e:
+            print(f"[FrameAnalyser] BŁĄD: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
+            return 0, []
+
 
     def DrawBox(self, frame, boxes: List[Box], people_count):
         line_poeple_size = 2
@@ -44,192 +225,144 @@ class FrameAnaylser:
                 cv2.rectangle(drawed_frame, (box.x1, box.y1), (box.x2, box.y2), (0, 255, 0), 1)
                 cv2.putText(drawed_frame, f"conf: {box.conf:.2f}", (box.x1-10, box.y1-10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), line_conf_size)
-            # cv2.putText(drawed_frame, f"conf: {box.conf:.2f}", (10, 50),
-            #         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), line_conf_size)
+
         cv2.putText(drawed_frame, f"Ludzi: {people_count}",
                 (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), line_poeple_size)
-        # cv2.putText(drawed_frame, f"conf: {0.00}", (10, 50),
-        #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), line_conf_size)
         return drawed_frame
-    # def FindPeople(self, frame) -> Tuple[Any, Dict[str, Any]]:
-    #     results = self.model(frame[..., ::-1], imgsz=640, conf=0.25, classes=[0], verbose=False)
-    #     detections = results[0].boxes
 
-    #     people_count = len(detections)
-    #     boxes_data = []
-    #     for detection in detections:
-    #         box = Box(0, 0, 0, 0, 0.00)
-    #         box.x1, box.y1, box.x2, box.y1 = map(int, detection.xyxy[0])
-            
-    #         box.conf = float(detection.conf[0])
-    #         boxes_data.append(box)
 
-    #     # ret, buffer = cv2.imencode('.jpg', analysed_frame)
-    #     # if ret:
-    #     #     with open("test1.jpg", "wb") as file:
-    #     #         file.write(buffer.tobytes())
-    #     return people_count, boxes_data
-    
-    def FindPeople(self, frame) -> Tuple[int, List[Box]]:
-        # MediaPipe używa RGB
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = self.pose.process(rgb_frame)
-        
-        if results.pose_landmarks:
-            # Znajdź bounding box z landmarks
-            h, w = frame.shape[:2]
-            landmarks = results.pose_landmarks.landmark
-            
-            x_coords = [lm.x * w for lm in landmarks]
-            y_coords = [lm.y * h for lm in landmarks]
-            
-            x1, y1 = int(min(x_coords)), int(min(y_coords))
-            x2, y2 = int(max(x_coords)), int(max(y_coords))
-            
-            box = Box(x1, y1, x2, y2, 0.9)
-            return 1, [box]
-        
-        return 0, []
-        
-        # def FindPeople(self, frame) -> Tuple[int, List[Box]]:
-        #     try:
-        #         # Opcjonalnie zmniejsz rozdzielczość dla szybkości
-        #         # frame = cv2.resize(frame, (640, 480))
-                
-        #         (rects, weights) = self.hog.detectMultiScale(
-        #             frame,
-        #             winStride=(8, 8),
-        #             padding=(4, 4),
-        #             scale=1.05,
-        #             useMeanshiftGrouping=True
-        #         )
-                
-        #         boxes_data = []
-        #         for i, (x, y, w, h) in enumerate(rects):
-        #             # Filtruj słabe detekcje
-        #             if weights[i] > 0.2:
-        #                 box = Box(x, y, x + w, y + h, float(weights[i]))
-        #                 boxes_data.append(box)
-                
-        #         return len(boxes_data), boxes_data
-                
-        #     except Exception as e:
-        #         print(f"[FrameAnalyser] Błąd detekcji: {e}", flush=True)
-        #         return 0, []
-        
 class MotionDetector:
     def __init__(self, threshold=25, min_area=5000):
-        self.threshold = threshold
+        self.threshold = 15
         self.min_area = min_area
         self.dead_zone = 30
+        self.gaus_blur = 15
 
-    def detectMotion(self, frame, prev_frame):
-        # Usprawdzenie rozmiarów obu klatek
+    def detectMotion(self, frame, prev_frame) -> bool:
         if frame.shape != prev_frame.shape:
             prev_frame = cv2.resize(prev_frame, (frame.shape[1], frame.shape[0]))
 
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        gray = cv2.GaussianBlur(gray, (21, 21), 0)
+        cv2.imwrite("gray.jpg", gray)
+        gray = cv2.GaussianBlur(gray, (self.gaus_blur, self.gaus_blur), 0)
+        cv2.imwrite("GaussianBlur.jpg", gray)
 
         prev_gray = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
-        prev_gray = cv2.GaussianBlur(prev_gray, (21, 21), 0)
+        prev_gray = cv2.GaussianBlur(prev_gray, (self.gaus_blur, self.gaus_blur), 0)
 
-        # różnica miedzy klatkami
         frame_delta = cv2.absdiff(prev_gray, gray)
         _, thresh = cv2.threshold(frame_delta, self.threshold, 255, cv2.THRESH_BINARY)
         thresh = cv2.dilate(thresh, None, iterations=2)
 
-        # zznajdź ruch
         contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
+        cv2.imwrite("thresh.jpg", thresh)
         motion_detected = False
         for contour in contours:
             if cv2.contourArea(contour) > self.min_area:
                 motion_detected = True
                 self.dead_zone = 15
-                # (x, y, w, h) = cv2.boundingRect(contour)
-                # cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 1)
-                # ret, buffer = cv2.imencode('.jpg', frame)
-                # if ret:
-                    # with open("test2.jpg", "wb") as file:
-                        # file.write(buffer.tobytes())
-            else:
-                if self.dead_zone > 0:
-                    motion_detected = True
-                    self.dead_zone -= 1
+                break
+        
+        if not motion_detected and self.dead_zone > 0:
+            motion_detected = True
+            self.dead_zone -= 1
+        
         return motion_detected
 
 
-# frame_queue = queue.Queue(maxsize=1)  # kolejka 1-elementowa
-
 class CAMMonitor:
-    def __init__(self, ws_url: str, card_monitor: CardMonitor, detect_motion=True, find_people=True) -> None:
+    def __init__(self, ws_url: str, card_monitor: CardMonitor, 
+                 detect_motion=True, find_people=True) -> None:
         self.ws_url = ws_url
         self.card_monitor = card_monitor
         self.thread = threading.Thread(target=self._ws_listener, daemon=True)
+        self.active = True
         self.prev_frame = None
         self.last_frame = None
-        self.active = True
+        self.stremed_frame = None
+        self.placeholder_frame = cv2.imread("stand_by.jpg")
         self.find_people = find_people
         self.detect_motion = detect_motion
-        self.frame_analyser = FrameAnaylser()
+        self.frame_analyser = FrameAnalyser()
         self.motion_detector = MotionDetector()
-        self.stremed_frame = None
+        
         self.motion_detected = False
         self.people_count = 0
-        self.frame_counter = 0
-        self.anylyze_interval = 5
         self.detection_boxes = []
-        placeholder_path = "stand_by.jpg"
-        self.placeholder_frame = cv2.imread(placeholder_path)
-        self.anylyze_interval = 10
+        
+        self.frame_counter = 0
+        self.analyze_interval = 10  # Co ile klatek analizować
+        
+        print(f"[CAMMonitor] Inicjalizacja: analyze_interval={self.analyze_interval}", flush=True)
 
     def startThread(self):
         self.thread.start()
+
     def _ws_listener(self):
         print("[DEBUG] Wątek ws_listener wystartował!", flush=True)
+        
         while self.active:
             try:
                 ws = websocket.WebSocket()
                 ws.connect(self.ws_url)
-                print(f"[CAMMonitor] Połączono z {self.ws_url}")
+                print(f"[CAMMonitor] ✓ Połączono z {self.ws_url}", flush=True)
+                
                 while self.active:
                     msg = ws.recv()
                     if not msg:
                         continue
 
                     if isinstance(msg, bytes):
-                        with open("test.jpg", "wb") as file:
-                            file.write(msg)
                         nparr = np.frombuffer(msg, np.uint8)
                         frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                        
                         if frame is not None:
+                            # Aktualizuj klatki
                             if self.last_frame is not None:
                                 self.prev_frame = self.last_frame
                             self.last_frame = frame
-                            if self.card_monitor.human_in and self.prev_frame is not None and self.find_people:
-                                self.motion_detected = self.motion_detector.detectMotion(self.last_frame, self.prev_frame)
-                                if self.frame_counter % self.anylyze_interval == 0:
-                                    self.people_count, self.detection_boxes, = self.frame_analyser.FindPeople(frame)
-
-                            if (self.people_count > 0 and len(self.detection_boxes) > 0):
-                                self.stremed_frame = self.frame_analyser.DrawBox(frame, self.detection_boxes, self.people_count)
-                            else:
-                                self.stremed_frame = self.frame_analyser.DrawBox(frame, [], 0)
+                            
+                            # Inkrementuj licznik
                             self.frame_counter += 1
-                            if self.frame_counter > 30:
+                            if self.frame_counter >= 60:
                                 self.frame_counter = 0
-                            if self.card_monitor.human_in == False:
+                            
+                            # DEBUG co 30 klatek
+                            if self.frame_counter % 30 == 0:
+                                print(f"[CAMMonitor] human_in={self.card_monitor.human_in}, "
+                                      f"frame={self.frame_counter}, people={self.people_count}", flush=True)
+                            
+                            # Sprawdź czy ktoś jest
+                            if not self.card_monitor.human_in:
+                                # NIKT - wyzeruj
                                 self.people_count = 0
-                        else:
-                            self.stremed_frame = self.placeholder_frame.copy()
-                            print("[CAMMonitor] Nie udało się zdekodować klatki")
-                    else:
-                        self.stremed_frame = self.placeholder_frame.copy()
-                        print(f"[CAMMonitor] [RAW MSG] {msg}")
+                                self.detection_boxes = []
+                                self.stremed_frame = self.frame_analyser.DrawBox(frame, [], 0)
+                                continue
+                            if self.detect_motion and self.prev_frame is not None:
+                                self.motion_detected = self.motion_detector.detectMotion(
+                                    self.last_frame, self.prev_frame
+                                )
 
-            except Exception as exeption:
-                print(f"[CAMMonitor] [BŁĄD] {exeption}, ponawiam połączenie za 5s...")
+                            if self.find_people and self.frame_counter % self.analyze_interval == 0:
+                                print(f"\n=== ANALIZA KLATKI {self.frame_counter} ===", flush=True)
+                                self.people_count, self.detection_boxes = \
+                                    self.frame_analyser.FindPeople(frame)
+                                print(f"=== WYKRYTO: {self.people_count} osób ===\n", flush=True)
+                            
+                            # Rysuj
+                            self.stremed_frame = self.frame_analyser.DrawBox(
+                                frame, self.detection_boxes, self.people_count
+                            )
+                            
+                        else:
+                            print("[CAMMonitor] Błąd dekodowania klatki", flush=True)
+                            self.stremed_frame = self.placeholder_frame.copy()
+
+            except Exception as e:
+                print(f"[CAMMonitor] ✗ BŁĄD: {e}", flush=True)
+                import traceback
+                traceback.print_exc()
                 self.stremed_frame = self.placeholder_frame.copy()
                 time.sleep(5)
 
@@ -237,70 +370,19 @@ class CAMMonitor:
         return self.last_frame
     
     def generate_frames(self):
-        frame_count = 0
-        no_frame_count = 0
-        
+        """Generator dla Flask MJPEG stream"""
         while True:
-            frame_to_stream = None
-            
-            # with self.frame_lock:
-            # if self.stremed_frame is not None:
-            #     frame_to_stream = self.stremed_frame.copy()
-            #     no_frame_count = 0
-            # else:
-            #     no_frame_count += 1
-            #     # Po 10 próbach (1 sekunda) użyj placeholder
-            #     if no_frame_count > 10:
-            #         frame_to_stream = self.placeholder_frame.copy()
-            
-            # Jeśli nadal nie ma klatki, czekaj krótko
             if self.stremed_frame is None:
                 time.sleep(0.1)
                 continue
 
-            # # Kodowanie do JPEG
-            # ret, buffer = cv2.imencode('.jpg', frame_to_stream, 
-            #                            [cv2.IMWRITE_JPEG_QUALITY, 80])
             ret, buffer = cv2.imencode('.jpg', self.stremed_frame, 
-                                       [cv2.IMWRITE_JPEG_QUALITY, 80])
+                                     [cv2.IMWRITE_JPEG_QUALITY, 80])
             if not ret:
-                print("[CAMMonitor] Błąd kodowania klatki")
                 time.sleep(0.1)
                 continue
 
-            frame_count += 1
-            if frame_count % 100 == 0:
-                print(f"[CAMMonitor] Wysłano {frame_count} klatek")
-
-            # Zwróć klatkę w formacie MJPEG
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
             
-            # Opcjonalne: limit FPS (30 fps = ~33ms)
             time.sleep(0.033)
-    
-    # def generate_frames(self):
-    #     while True:
-    #         if self.stremed_frame is None:
-    #             time.sleep(0.1)
-    #             continue
-
-    #         ret, buffer = cv2.imencode('.jpg', self.stream_frame)
-    #         if not ret:
-    #             continue
-
-    #         yield (b'--frame\r\n'
-    #                b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
-
-    # def generate_frames():
-    #     while True:
-    #         if not frame_queue.empty():
-    #             frame = frame_queue.get()
-    #             # Kodowanie do JPEG
-    #             ret, buffer = cv2.imencode('.jpg', frame)
-    #             if not ret:
-    #                 continue
-    #             frame_bytes = buffer.tobytes()
-    #             # Strumieniowanie MJPEG
-    #             yield (b'--frame\r\n'
-    #                 b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
