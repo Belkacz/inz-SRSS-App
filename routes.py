@@ -1,7 +1,7 @@
 import time
 from flask import Response, jsonify, render_template
 
-def register_routes(app, pir_monitor, alarm_manager, alarm_pir, cam_monitor, card_monitor):
+def register_routes(app, pir_monitor, safety_monitor, cam_monitor, card_monitor):
     @app.route('/pir', methods=['GET'])
     def get_pir_data():
         data_copy = pir_monitor.get_data()
@@ -16,14 +16,24 @@ def register_routes(app, pir_monitor, alarm_manager, alarm_pir, cam_monitor, car
     #         'message': 'Brak aktywności!' if alarm_status else 'System aktywny'
     #     })
 
-    @app.route("/api/status")
+    @app.route("/api/status_pir")
     def get_status():
         status = {
-            "pir26Counter": alarm_pir.getPirCounter(26),
-            "pir16Counter": alarm_pir.getPirCounter(16),
-            "alarmStatus": alarm_manager.getPirAlarm(),
-            "currentInterval" : int(alarm_pir.checkInterval),
-            "nextRefreshIn": int(alarm_pir.checkInterval - ((time.time() - alarm_pir.lastCounterRestTime) % alarm_pir.checkInterval))
+            "pir26Counter": safety_monitor.current_pir26,
+            "pir16Counter": safety_monitor.current_pir16,
+            "alarmStatus": safety_monitor.pir_alarm,
+            "currentInterval": safety_monitor.pir_interval,
+            "nextRefreshIn": int(safety_monitor.pir_interval- ((time.time() - int(safety_monitor.last_pir_check)) % safety_monitor.pir_interval))
+        }
+        return jsonify(status)
+    
+    @app.route("/api/cam_status")
+    def get_cam_status():
+        status = {
+            "motionDetected": getattr(safety_monitor.cam_monitor, "motion_detected", False),
+            "peopleCount": getattr(safety_monitor.cam_monitor, "people_count", 0),
+            "currentInterval": safety_monitor.cam_interval,
+            "nextRefreshIn":  int(safety_monitor.cam_interval - ((time.time() - safety_monitor.last_cam_check) % safety_monitor.cam_interval))
         }
         return jsonify(status)
 

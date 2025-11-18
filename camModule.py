@@ -63,8 +63,8 @@ class FrameAnalyser:
             
             for iteration in range(self.max_people):
                 # Debug
-                if iteration == 0:
-                    cv2.imwrite("debug_working_frame_iter0.jpg", working_frame)
+                # if iteration == 0:
+                #     cv2.imwrite("debug_working_frame_iter0.jpg", working_frame)
                 
                 # MediaPipe
                 rgb_frame = cv2.cvtColor(working_frame, cv2.COLOR_BGR2RGB)
@@ -96,10 +96,10 @@ class FrameAnalyser:
                     y2 = int(min(h, max(y_coords)))
 
                     # FILTR 1: Powierzchnia boxa
-                    box_area = (x2 - x1) * (y2 - y1)
-                    if box_area < min_box_area:
-                        print(f"[FrameAnalyser] ✗ Odrzucono iter {iteration+1}: za mały box ({box_area} px < {min_box_area})", flush=True)
-                        break
+                    # box_area = (x2 - x1) * (y2 - y1)
+                    # if box_area < min_box_area:
+                    #     print(f"[FrameAnalyser] ✗ Odrzucono iter {iteration+1}: za mały box ({box_area} px < {min_box_area})", flush=True)
+                    #     break
 
                     # FILTR 2: Visibility
                     visibility_percent = (visibility_sum / landmarks_counter * 100) if landmarks_counter > 0 else 0
@@ -111,20 +111,14 @@ class FrameAnalyser:
                     box = Box(x1, y1, x2, y2, visibility_percent)
                     boxes_data.append(box)
 
-                    print(f"[FrameAnalyser] ✓ Osoba #{iteration+1}: area={box_area}px, vis={visibility_percent:.1f}%", flush=True)
-
                     # WYMAŻ z dużym marginesem
                     working_frame = self.erase_person(working_frame, (x1, y1), (x2, y2))
-                    # working_frame = self.erase_person_ellipse(working_frame, (x1, y1), (x2, y2), (0, 0, 0), thickness=-1)
-                    
-                    # Debug
-                    cv2.imwrite(f"debug_after_erase_person{iteration+1}.jpg", working_frame)
+                    # cv2.imwrite(f"debug_after_erase_person{iteration+1}.jpg", working_frame)
                     
                 else:
-                    print(f"[FrameAnalyser] ✗ Nie znaleziono więcej osób po {iteration} iteracjach", flush=True)
                     break
             
-            print(f"[FrameAnalyser] Wykryto łącznie {len(boxes_data)} osób\n", flush=True)
+            # print(f"[FrameAnalyser] Wykryto łącznie {len(boxes_data)} osób\n", flush=True)
             return len(boxes_data), boxes_data
             
         except Exception as e:
@@ -161,9 +155,9 @@ class MotionDetector:
             prev_frame = cv2.resize(prev_frame, (frame.shape[1], frame.shape[0]))
 
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        cv2.imwrite("gray.jpg", gray)
+        # cv2.imwrite("gray.jpg", gray)
         gray = cv2.GaussianBlur(gray, (self.gaus_blur, self.gaus_blur), 0)
-        cv2.imwrite("GaussianBlur.jpg", gray)
+        # cv2.imwrite("GaussianBlur.jpg", gray)
 
         prev_gray = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
         prev_gray = cv2.GaussianBlur(prev_gray, (self.gaus_blur, self.gaus_blur), 0)
@@ -173,7 +167,7 @@ class MotionDetector:
         thresh = cv2.dilate(thresh, None, iterations=2)
 
         contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        cv2.imwrite("thresh.jpg", thresh)
+        # cv2.imwrite("thresh.jpg", thresh)
         motion_detected = False
         for contour in contours:
             if cv2.contourArea(contour) > self.min_area:
@@ -205,9 +199,10 @@ class CAMMonitor:
         self.motion_detector = MotionDetector()
         
         self.motion_detected = False
+        self.motion_saftey = False
+        self.frames_with_movement = 0
         self.people_count = 0
         self.frame_counter = 0
-        self.anylyze_interval = 10
         self.detection_boxes = []
         
         self.frame_counter = 0
@@ -247,11 +242,6 @@ class CAMMonitor:
                             if self.frame_counter >= 60:
                                 self.frame_counter = 0
                             
-                            # DEBUG co 30 klatek
-                            if self.frame_counter % 30 == 0:
-                                print(f"[CAMMonitor] human_in={self.card_monitor.human_in}, "
-                                      f"frame={self.frame_counter}, people={self.people_count}", flush=True)
-                            
                             # Sprawdź czy ktoś jest
                             if not self.card_monitor.human_in:
                                 # NIKT - wyzeruj
@@ -259,16 +249,23 @@ class CAMMonitor:
                                 self.detection_boxes = []
                                 self.stremed_frame = self.frame_analyser.DrawBox(frame, [], 0)
                                 continue
-                            if self.detect_motion and self.prev_frame is not None:
-                                self.motion_detected = self.motion_detector.detectMotion(
-                                    self.last_frame, self.prev_frame
-                                )
+                            # if self.detect_motion and self.prev_frame is not None:
+                            #     self.motion_detected = self.motion_detector.detectMotion(
+                            #         self.last_frame, self.prev_frame)
+                            #     if self.motion_detected :
+                            #         self.motion_saftey = True
+                                
+                                # print(f"motion_detected  =  {self.motion_detected}")
+                                # if(self.motion_detected):
+                                    
+                                    # self.frames_with_movement +=1
+                                    # if(self.frames_with_movement > 30 * 60 * 10 ):
+                                    #     self.frames_with_movement = 1
 
                             if self.find_people and self.frame_counter % self.analyze_interval == 0:
-                                print(f"\n=== ANALIZA KLATKI {self.frame_counter} ===", flush=True)
-                                self.people_count, self.detection_boxes = \
-                                    self.frame_analyser.FindPeople(frame)
-                                print(f"=== WYKRYTO: {self.people_count} osób ===\n", flush=True)
+                                # print(f"\n=== ANALIZA KLATKI {self.frame_counter} ===", flush=True)
+                                self.people_count, self.detection_boxes = self.frame_analyser.FindPeople(frame)
+                                # print(f"=== WYKRYTO: {self.people_count} osób ===\n", flush=True)
                             
                             # Rysuj
                             self.stremed_frame = self.frame_analyser.DrawBox(
