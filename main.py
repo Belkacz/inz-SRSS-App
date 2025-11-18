@@ -8,11 +8,11 @@ from shared import AlarmManager
 from settings import settings
 import threading
 import time
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 import os
 
 
-load_dotenv()
+# load_dotenv()
 
 # def monitor_pir():
 #     last_pir26_counter = None
