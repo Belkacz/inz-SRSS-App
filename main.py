@@ -11,9 +11,7 @@ import time
 # from dotenv import load_dotenv
 import os
 
-PIR_REFRESH = 15
-CAM_REFRESH = 15
-GENERAL_REFRESH = 15
+GENERAL_REFRESH = 60
 
 
 def main():
@@ -25,7 +23,7 @@ def main():
     card_monitor = CardMonitor(settings.WS_CARD_URL, user_handler)
     cam_monitor = CAMMonitor(settings.WS_CAMERA_URL, card_monitor)
     
-    safety_monitor = SafetyMonitor(pir_monitor, cam_monitor, card_monitor, PIR_REFRESH, CAM_REFRESH, GENERAL_REFRESH)
+    safety_monitor = SafetyMonitor(pir_monitor, cam_monitor, card_monitor, GENERAL_REFRESH)
     register_routes(app, pir_monitor, safety_monitor, cam_monitor, card_monitor)
 
     pir_monitor.startThread()

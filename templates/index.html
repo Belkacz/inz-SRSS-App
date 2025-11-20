@@ -106,6 +106,11 @@
       background-color: #222;
     }
 
+    .incrementer {
+      display: flex;
+      align-items: center;
+    }
+
     @media (max-width: 1000px) {
       .grid {
         grid-template-columns: 1fr;
@@ -152,23 +157,40 @@
 
       <!-- Środek -->
       <div class="card">
-        <h2>PIR i Alarm</h2>
+        <h2>PIR i Cam status</h2>
         <div class="counter">PIR26: <span id="pir26">--</span></div>
         <div class="counter">PIR16: <span id="pir16">--</span></div>
 
         <div style="margin-top: 1em;">
           <h3>Stan alarmu:</h3>
           <div id="alarm" class="alarm-off">--</div>
-                <div style="margin-top: 1em;">
-          <h3>Odświeżenie za:</h3>
-            <div id="refresh">-- s</div>
-          </div>
           <br>
           <h2>Stan kamery</h2>
-          <div>Ruch wykryty: <span id="cam-motion">--</span></div>
-          <div>Liczba osób: <span id="cam-people">--</span></div>
-          <div>Odświeżenie za: <span id="cam-refresh">-- s</span></div>
+          <div>
+            Ruch wykryty: <span id="cam-motion">--</span>
+          </div>
+          <div>
+            Liczba osób: <span id="cam-people">--</span>
+          </div>
+        <div style="margin-top: 1em;">
+        <div class="interval-control">
+            <p>Aktualne odświeżanie</p>
+            <div class="incrementer">
+              <button onclick="decreaseInterval()">➖</button>
+              <div>
+                <div class="interval-display" id="interval-display">30s</div>
+              </div>
+              <button onclick="increaseInterval()">➕</button>
+            </div> 
         </div>
+          <h3>Odświeżenie za:</h3>
+            <div id="sensor-refresh">-- s</div>
+          </div>
+        <button onclick="fetchSensorsData()" style="width: 100%; margin-top: 0.5em;">
+          🔄 Odśwież Teraz
+        </button>
+        </div>
+
       </div>
 
       <!-- Prawa kolumna -->
@@ -182,17 +204,49 @@
   </div>
 
   <script>
-    let pirRefreshTime = 60;
-    let camRefreshTime = 60;
-    let generalRefreshTime = 60;
+    const BASE_REFRESH_INTERVAL = 60;
+    let generalRefreshTime = BASE_REFRESH_INTERVAL;
+    let sensorRefreshTime = 30;
+    const MIN_INTERVAL = 10;     // 30 sekund
+    const MAX_INTERVAL = 300;    // 5 minut
+    const INTERVAL_STEP = 10;    // Krok 30 sekund
+    let sensorsInterval = 30;
 
-    async function fetchPirData() {
+    function formatTime(seconds) {
+      if (seconds < 60) return `${seconds}s`;
+      const minutes = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      return secs > 0 ? `${minutes}m ${secs}s` : `${minutes}m`;
+    }
+
+    // Zwiększ interwał
+    function increaseInterval() {
+      if (sensorsInterval < MAX_INTERVAL) {
+        sensorsInterval += INTERVAL_STEP;
+        document.getElementById('interval-display').textContent = formatTime(sensorsInterval);
+        sensorRefreshTime = sensorsInterval; // <- reset countdownsensorRefreshTime
+      }
+}
+
+    // Zmniejsz interwał
+    function decreaseInterval() {
+      if (sensorsInterval > MIN_INTERVAL) {
+        sensorsInterval -= INTERVAL_STEP;
+        document.getElementById('interval-display').textContent = formatTime(sensorsInterval);
+        sensorRefreshTime = sensorsInterval; // <- reset countdown
+      }
+    }
+
+    //fetch data pir, cam and alarm
+
+    async function fetchSensorsData() {
+      console.log("fetchSensorsData()")
       try {
-        const res = await fetch("/api/pir_status");
+        const res = await fetch("/api/sensors_status");
         const data = await res.json();
 
-        document.getElementById("pir26").textContent = data.pir26Counter ?? 0;
-        document.getElementById("pir16").textContent = data.pir16Counter ?? 0;
+        document.getElementById("pir26").textContent = data.pirData?.pir26Counter ?? 0;
+        document.getElementById("pir16").textContent = data.pirData?.pir16Counter ?? 0;
 
         const alarmEl = document.getElementById("alarm");
         if (data.alarmStatus) {
@@ -203,40 +257,20 @@
           alarmEl.className = "alarm-off";
         }
 
-        pirRefreshTime = data.nextRefreshIn > 0 ? data.nextRefreshIn : 0;
+        document.getElementById("cam-motion").textContent = data.camData?.motionDetected ? "Tak" : "Nie";
+        document.getElementById("cam-people").textContent = data.camData?.peopleCount ?? 0;
       } catch (err) {
-        console.error("Błąd pobierania statusu PIR:", err);
-      }
-
-      await fetchUsers();
-    }
-
-    function pirCountdown() {
-      document.getElementById("refresh").textContent = `${pirRefreshTime}s`;
-      pirRefreshTime--;
-      if (pirRefreshTime <= 0) {
-        fetchPirData();
+        console.error("Błąd pobierania głównego statusu:", err);
       }
     }
-
-    async function fetchCamStatus() {
-      try {
-        const res = await fetch("/api/cam_status");
-        const data = await res.json();
-
-        document.getElementById("cam-motion").textContent = data.motionDetected ? "Tak" : "Nie";
-        document.getElementById("cam-people").textContent = data.peopleCount ?? 0;
-        camRefreshTime = data.nextRefreshIn > 0 ? data.nextRefreshIn : 0;
-      } catch (err) {
-        console.error("Błąd pobierania statusu kamery:", err);
-      }
-    }
-
-    function camCountdown() {
-      document.getElementById("cam-refresh").textContent = `${camRefreshTime}s`;
-      camRefreshTime--;
-      if (camRefreshTime <= 0) {
-        fetchCamStatus();
+    function sensorsCountdown() {
+      document.getElementById("sensor-refresh").textContent = `${sensorRefreshTime}s`;
+      sensorRefreshTime--;
+      console.log(sensorRefreshTime)
+      if (sensorRefreshTime <= 0) {
+        console.log(sensorRefreshTime <= 0)
+        fetchSensorsData();
+        sensorRefreshTime = sensorsInterval;
       }
     }
 
@@ -252,12 +286,12 @@
             } else {
               document.getElementById("reset-btn").disabled = true
             }
+        console.log(data.nextRefreshIn)
         generalRefreshTime = data.nextRefreshIn > 0 ? data.nextRefreshIn : 0;
       } catch (err) {
         console.error("Błąd pobierania głównego statusu:", err);
       }
     }
-  
     function generalCountdown() {
       document.getElementById("general-refresh").textContent = `${generalRefreshTime}s`;
       generalRefreshTime--;
@@ -266,6 +300,12 @@
       }
     }
 
+    fetchSensorsData();
+    fetchGeneralStatus();
+    setInterval(generalCountdown, 1000);
+    setInterval(sensorsCountdown, 1000);
+
+    // users fetch
     async function fetchUsers() {
       try {
         const res = await fetch("/users");
@@ -323,23 +363,13 @@
     function stopStream() {
       document.getElementById('video-container').innerHTML = '';
     }
-    
 
-    // Uruchom od razu
-    fetchPirData();
-    fetchCamStatus();
-    fetchGeneralStatus();
-    setInterval(pirCountdown, 1000);
-    setInterval(camCountdown, 1000);
-    setInterval(generalCountdown, 1000);
-
+    // PATCH
     async function resetAlarm() {
       try {
         const res = await fetch("/api/general_status", {
           method: "PATCH",
-          headers: {
-            "Content-Type": "application/json"
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ generalReset: true })
         });
 
@@ -347,20 +377,19 @@
           console.error("Błąd podczas resetowania alarmu:", res.status);
           return;
         }
-        const data = await res.json();
-        console.log("Reset alarmu OK:", data);
-        // Zablokuj przycisk resetu i odśwież status
+
+        console.log("Reset alarmu OK");
         document.getElementById("reset-btn").disabled = true;
-        // Odśwież natychmiast
-        fetchPirData();
-        fetchCamStatus();
-        generalStatus();
+        // natychmiast odśwież statusy
+        fetchSensorsData();
+        fetchGeneralStatus();
 
       } catch (err) {
         console.error("Błąd połączenia przy resecie:", err);
       }
     }
     document.getElementById("reset-btn").addEventListener("click", resetAlarm);
+
   </script>
 </body>
 </html>

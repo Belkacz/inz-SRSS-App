@@ -15,6 +15,12 @@ def register_routes(app, pir_monitor, safety_monitor, cam_monitor, card_monitor)
     #         'alarm': alarm_status,
     #         'message': 'Brak aktywności!' if alarm_status else 'System aktywny'
     #     })
+    # @app.route("/api/set_fps", methods=["GET", "PATCH"])
+    # def setFPS():
+    #     if request.method == "PATCH":
+    #         data = request.get_json(force=True)
+    #         if data.get("FPS"):
+    #             cam_monitor.setSteamFPS(data.FPS)
     @app.route("/api/general_status", methods=["GET", "PATCH"])
     def get_general_alert():
         if request.method == "PATCH":
@@ -37,31 +43,27 @@ def register_routes(app, pir_monitor, safety_monitor, cam_monitor, card_monitor)
             "nextRefreshIn": int(time_until_next)
         }
         return jsonify(status)
-
-    @app.route("/api/pir_status")
-    def get_pir_status():
+    
+    @app.route("/api/sensors_status")
+    def get_sensor_status():
+        pir26, pir16 = safety_monitor.getPirData()
+        cam_motion, people_in_danger, cam_alarm =safety_monitor.getCamData()
         status = {
-            "pir26Counter": safety_monitor.current_pir26,
-            "pir16Counter": safety_monitor.current_pir16,
-            "alarmStatus": safety_monitor.pir_alarm,
-            "currentInterval": safety_monitor.pir_interval,
-            "nextRefreshIn": int(safety_monitor.pir_interval- ((time.time() - int(safety_monitor.last_pir_check)) % safety_monitor.pir_interval))
+            "pirData": {
+                "pir26Counter": pir26,
+                "pir16Counter": pir16,
+                "alarmStatus": safety_monitor.pir_alarm,
+            },
+            "camData": {
+                "motionDetected": cam_motion,
+                "peopleCount": people_in_danger,
+            }
         }
         return jsonify(status)
     
-    @app.route("/api/cam_status")
-    def get_cam_status():
-        status = {
-            "motionDetected": safety_monitor.cam_monitor.motion_saftey,
-            "peopleCount": safety_monitor.cam_monitor.people_count,
-            "currentInterval": safety_monitor.cam_interval,
-            "nextRefreshIn":  int(safety_monitor.cam_interval - ((time.time() - safety_monitor.last_cam_check) % safety_monitor.cam_interval))
-        }
-        return jsonify(status)
-
     @app.route('/video_feed')
     def video_feed():
-        return Response(cam_monitor.generate_frames(),
+        return Response(cam_monitor.generateFrames(),
                         mimetype='multipart/x-mixed-replace; boundary=frame')
     
     @app.route('/users')

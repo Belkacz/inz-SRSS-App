@@ -81,7 +81,7 @@ def sendAlertEmail(users_in: tuple[list], current_pir26, current_pir16, people_i
 
 class SafetyMonitor:
     def __init__(self, pir_monitor: PIRMonitor, cam_monitor: CAMMonitor, card_monitor: CardMonitor,
-                 pir_interval=30, cam_interval=30, alert_interval=(60*5)) -> None:
+                alert_interval=(60*5)) -> None:
         """
         Args:
             pir_interval: Jak często sprawdzać PIR (sekundy) - dla UI
@@ -92,13 +92,13 @@ class SafetyMonitor:
         self.cam_monitor = cam_monitor
         self.card_monitor = card_monitor
         self.alert_interval = alert_interval
-        self.pir_interval = pir_interval
-        self.cam_interval = cam_interval
         self.working = True
         
         # Dane z czujników (aktualizowane często)
         self.current_pir26 = 0
         self.current_pir16 = 0
+        self.total_pir26 = 0
+        self.total_pir16 = 0
         self.people_in_danger = 0
         
         # Czasy ostatnich sprawdzeń
@@ -108,7 +108,8 @@ class SafetyMonitor:
         
         # Stany alarmów (aktualizowane często - dla UI)
         self.pir_alarm = False
-        self.cam_alarm = False
+        self.current_cam_alarm = False
+        self.general_cam_alarm = False
         
         # Stan głównego zagrożenia (aktualizowany rzadko - dla maili)
         self.danger = False
@@ -117,71 +118,101 @@ class SafetyMonitor:
         
         self.thread = threading.Thread(target=self.startAlerts, daemon=True)
         print(f"[SafetyMonitor] Inicjalizacja:", flush=True)
-        print(f" PIR: co {pir_interval}s", flush=True)
-        print(f" CAM: co {cam_interval}s", flush=True)
         print(f" ALERT: co {alert_interval}s", flush=True)
 
     def startThread(self):
         self.thread.start()
         print("[SafetyMonitor] Wątek uruchomiony", flush=True)
 
+    def getPirData(self):
+        pir26 = self.pir_monitor.getPirCounter(26)
+        pir16 = self.pir_monitor.getPirCounter(16)
+        self.total_pir26 += pir26
+        self.total_pir16 += pir16
+        if pir26 is not None or pir16 is not None:
+            if pir26 > 0 or pir16 > 0:
+                self.pir_alarm = False
+                print(f"[SafetyMonitor] PIR OK: Ruch wykryty (PIR26={pir26}, PIR16={pir16})", flush=True)
+            else:
+                self.pir_alarm = True
+                print(f"[SafetyMonitor] PIR ALARM: Brak ruchu! (PIR26={pir26}, PIR16={pir16})", flush=True)
+            
+            self.pir_monitor.restCounters()
+        else:
+            self.pir_alarm = False
+            print("[SafetyMonitor] Brak danych z PIR", flush=True)
+        return pir26, pir16
+    
+    def getCamData(self):
+        print(f"[SafetyMonitor] Sprawdzam kamerę...", flush=True)
+        cam_motion = self.cam_monitor.motion_saftey
+        self.people_in_danger = self.cam_monitor.people_count
+        cam_alarm = False
+        if cam_motion:
+            cam_alarm = False
+            print(f"[SafetyMonitor] CAM OK: Ruch wykryty, osób={self.people_in_danger}", flush=True)
+        else:
+            self.general_cam_alarm = True
+            cam_alarm = True
+            print(f"[SafetyMonitor] CAM ALARM: Brak ruchu! Osób={self.people_in_danger}", flush=True)
+        self.cam_monitor.motion_saftey = False
+        return cam_motion, self.people_in_danger, cam_alarm
+
+    # def updatePirAlarm(self):
+    #     # ===== SPRAWDZANIE PIR (częste - dla UI) =====
+    #     print(f"\n[SafetyMonitor] Update PIR...", flush=True)
+        
+    #     self.current_pir26 = self.pir_monitor.getPirCounter(26)
+    #     self.current_pir16 = self.pir_monitor.getPirCounter(16)
+        
+    #     self.total_pir26 += self.current_pir26
+    #     self.total_pir16 += self.current_pir16
+    #     if self.current_pir26 is not None or self.current_pir16 is not None:
+    #         if self.current_pir26 > 0 or self.current_pir16 > 0:
+    #             self.pir_alarm = False
+    #             print(f"[SafetyMonitor] PIR OK: Ruch wykryty (PIR26={self.current_pir26}, PIR16={self.current_pir16})", flush=True)
+    #         else:
+    #             self.pir_alarm = True
+    #             print(f"[SafetyMonitor] PIR ALARM: Brak ruchu! (PIR26={self.current_pir26}, PIR16={self.current_pir16})", flush=True)
+            
+    #         self.pir_monitor.restCounters()
+    #     else:
+    #         self.pir_alarm = False
+    #         print("[SafetyMonitor] Brak danych z PIR", flush=True)
+
+    # def updateCamAlarm(self):
+    #     # ===== SPRAWDZANIE KAMERY (częste - dla UI) =====
+    #     print(f"[SafetyMonitor] Sprawdzam kamerę...", flush=True)
+    #     cam_motion = self.cam_monitor.motion_saftey
+    #     self.people_in_danger = self.cam_monitor.people_count
+        
+    #     if cam_motion:
+    #         self.cam_alarm = False
+    #         print(f"[SafetyMonitor] CAM OK: Ruch wykryty, osób={self.people_in_danger}", flush=True)
+    #     else:
+    #         self.cam_alarm = True
+    #         self.current_cam_alarm = True
+    #         print(f"[SafetyMonitor] CAM ALARM: Brak ruchu! Osób={self.people_in_danger}", flush=True)
+        
+    #     self.cam_monitor.motion_saftey = False
+
     def startAlerts(self):
         print("[SafetyMonitor] Monitoring rozpoczęty", flush=True)
         
         while self.working:
             iteration_time = time.time()
-            
-            # ===== SPRAWDZANIE PIR (częste - dla UI) =====
-            if iteration_time - self.last_pir_check >= self.pir_interval:
-                print(f"\n[SafetyMonitor] Sprawdzam PIR...", flush=True)
-                
-                self.current_pir26 = self.pir_monitor.getPirCounter(26)
-                self.current_pir16 = self.pir_monitor.getPirCounter(16)
-                
-                if self.current_pir26 is not None or self.current_pir16 is not None:
-                    if self.current_pir26 > 0 or self.current_pir16 > 0:
-                        self.pir_alarm = False
-                        print(f"[SafetyMonitor] PIR OK: Ruch wykryty (PIR26={self.current_pir26}, PIR16={self.current_pir16})", flush=True)
-                    else:
-                        self.pir_alarm = True
-                        print(f"[SafetyMonitor] PIR ALARM: Brak ruchu! (PIR26={self.current_pir26}, PIR16={self.current_pir16})", flush=True)
-                    
-                    self.pir_monitor.restCounters()
-                else:
-                    self.pir_alarm = False
-                    print("[SafetyMonitor] Brak danych z PIR", flush=True)
-                
-                self.last_pir_check = iteration_time
-            
-            # ===== SPRAWDZANIE KAMERY (częste - dla UI) =====
-            if iteration_time - self.last_cam_check >= self.cam_interval:
-                print(f"[SafetyMonitor] 📹 Sprawdzam kamerę...", flush=True)
-                
-                cam_motion = self.cam_monitor.motion_saftey
-                self.people_in_danger = self.cam_monitor.people_count
-                
-                if cam_motion:
-                    self.cam_alarm = False
-                    print(f"[SafetyMonitor] CAM OK: Ruch wykryty, osób={self.people_in_danger}", flush=True)
-                else:
-                    self.cam_alarm = True
-                    print(f"[SafetyMonitor] CAM ALARM: Brak ruchu! Osób={self.people_in_danger}", flush=True)
-                
-                self.cam_monitor.motion_saftey = False
-                self.last_cam_check = iteration_time
-            
             # SPRAWDZANIE GŁÓWNEGO ALERTU
             if iteration_time - self.last_alert_check >= self.alert_interval and self.main_alert_on:
+                self.getPirData()
+                self.getCamData()
                 print(f"[SafetyMonitor] SPRAWDZANIE GŁÓWNEGO ALARMU", flush=True)
                 print(f"  Człowiek w środku: {self.card_monitor.human_in}", flush=True)
-                print(f"  Alarm kamery: {self.cam_alarm}", flush=True)
+                print(f"  Alarm kamery: {self.general_cam_alarm}", flush=True)
                 print(f"  Alarm PIR: {self.pir_alarm}", flush=True)
                 
                 # DANGER = wszystkie warunki spełnione TERAZ
-                if self.cam_alarm and self.pir_alarm and self.card_monitor.human_in:
+                if self.general_cam_alarm and self.total_pir26 == 0 and self.total_pir16 == 0 and self.card_monitor.human_in:
                     self.danger = True
-                    self.main_alert_on = False
-                    
                     print(f"{'='*60}", flush=True)
                     print(f"[SafetyMonitor] !!!! DANGER !!!!", flush=True)
                     print(f"  Brak ruchu przy obecności człowieka przez {self.alert_interval}s!", flush=True)
@@ -200,6 +231,7 @@ class SafetyMonitor:
                             ):
                                 self.email_sent = True
                                 print("[SafetyMonitor] Mail wysłany pomyślnie", flush=True)
+                                self.main_alert_on = False
                             else:
                                 print("[SafetyMonitor] Nie udało się wysłać maila", flush=True)
                         except Exception as e:
@@ -212,5 +244,7 @@ class SafetyMonitor:
                 
                 print(f"{'='*60}\n", flush=True)
                 self.last_alert_check = iteration_time
-            
-            time.sleep(1)
+                self.total_pir26 = 0
+                self.total_pir16 = 0
+                self.general_cam_alarm = False
+            time.sleep(self.alert_interval)

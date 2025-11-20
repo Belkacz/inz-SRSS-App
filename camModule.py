@@ -27,7 +27,7 @@ class FrameAnalyser:
         self.pose = self.mp_pose.Pose(
             static_image_mode=False,
             model_complexity=0,
-            min_detection_confidence=0.5
+            min_detection_confidence=0.4
         )
         self.max_people = 3  # Maksymalnie szukaj 3 osób
 
@@ -39,9 +39,9 @@ class FrameAnalyser:
         width = x2 - x1
         height = y2 - y1
         
-        # MARGINES - 20%
-        margin_x = int(0.2 * width)
-        margin_y = int(0.2 * height)
+        # MARGINES - 10%
+        margin_x = int(0.1 * width)
+        margin_y = int(0.1 * height)
         
         x1_new = max(0, x1 - margin_x)
         x2_new = min(w, x2 + margin_x)
@@ -144,8 +144,8 @@ class FrameAnalyser:
 
 
 class MotionDetector:
-    def __init__(self, threshold=25, min_area=5000):
-        self.threshold = 15
+    def __init__(self, threshold=25, min_area=2000):
+        self.threshold = 10
         self.min_area = min_area
         self.dead_zone = 30
         self.gaus_blur = 15
@@ -172,12 +172,12 @@ class MotionDetector:
         for contour in contours:
             if cv2.contourArea(contour) > self.min_area:
                 motion_detected = True
-                self.dead_zone = 15
+                # self.dead_zone = 15
                 break
         
-        if not motion_detected and self.dead_zone > 0:
-            motion_detected = True
-            self.dead_zone -= 1
+        # if not motion_detected and self.dead_zone > 0:
+        #     motion_detected = True
+        #     self.dead_zone -= 1
         
         return motion_detected
 
@@ -207,6 +207,8 @@ class CAMMonitor:
         
         self.frame_counter = 0
         self.analyze_interval = 10  # Co ile klatek analizować
+
+        self.stream_delay = 0.033 # 1/30 sekunda dzielona na fps
         
         print(f"[CAMMonitor] Inicjalizacja: analyze_interval={self.analyze_interval}", flush=True)
 
@@ -232,11 +234,6 @@ class CAMMonitor:
                         frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
                         
                         if frame is not None:
-                            # Aktualizuj klatki
-                            if self.last_frame is not None:
-                                self.prev_frame = self.last_frame
-                            self.last_frame = frame
-                            
                             # Inkrementuj licznik
                             self.frame_counter += 1
                             if self.frame_counter >= 60:
@@ -249,11 +246,12 @@ class CAMMonitor:
                                 self.detection_boxes = []
                                 self.stremed_frame = self.frame_analyser.DrawBox(frame, [], 0)
                                 continue
-                            # if self.detect_motion and self.prev_frame is not None:
-                            #     self.motion_detected = self.motion_detector.detectMotion(
-                            #         self.last_frame, self.prev_frame)
-                            #     if self.motion_detected :
-                            #         self.motion_saftey = True
+
+                            if self.detect_motion and self.prev_frame is not None:
+                                self.motion_detected = self.motion_detector.detectMotion(
+                                    frame, self.prev_frame)
+                                if self.motion_detected:
+                                    self.motion_saftey = True
                                 
                                 # print(f"motion_detected  =  {self.motion_detected}")
                                 # if(self.motion_detected):
@@ -266,7 +264,7 @@ class CAMMonitor:
                                 # print(f"\n=== ANALIZA KLATKI {self.frame_counter} ===", flush=True)
                                 self.people_count, self.detection_boxes = self.frame_analyser.FindPeople(frame)
                                 # print(f"=== WYKRYTO: {self.people_count} osób ===\n", flush=True)
-                            
+                            self.prev_frame = frame
                             # Rysuj
                             self.stremed_frame = self.frame_analyser.DrawBox(
                                 frame, self.detection_boxes, self.people_count
@@ -277,16 +275,21 @@ class CAMMonitor:
                             self.stremed_frame = self.placeholder_frame.copy()
 
             except Exception as e:
-                print(f"[CAMMonitor] ✗ BŁĄD: {e}", flush=True)
+                print(f"[CAMMonitor] BŁĄD: {e}", flush=True)
                 import traceback
                 traceback.print_exc()
                 self.stremed_frame = self.placeholder_frame.copy()
                 time.sleep(5)
 
-    def get_frame(self):
-        return self.last_frame
-    
-    def generate_frames(self):
+    # def setSteamFPS(self, fps: int):
+    #     if(fps < 60 and fps > 1):
+    #         self.stream_delay =  1 / fps
+    #         return True
+    #     else:
+    #         self.stream_delay = 0.033
+    #         return False
+
+    def generateFrames(self):
         """Generator dla Flask MJPEG stream"""
         while True:
             if self.stremed_frame is None:
@@ -302,4 +305,4 @@ class CAMMonitor:
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
             
-            time.sleep(0.033)
+            time.sleep(self.stream_delay)
