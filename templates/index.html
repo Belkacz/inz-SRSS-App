@@ -79,6 +79,13 @@
       background: #555;
     }
 
+    button:disabled {
+      cursor: not-allowed;
+      color: #000000ff;
+      background: #a2a2a2ff;
+      box-shadow: inset 0px 0px 30px 20px rgba(66, 68, 90, 1);
+    }
+
     .arrow {
       cursor: pointer;
       width: 25px;
@@ -109,68 +116,83 @@
 <body>
   <h1>SRSS Monitoring</h1>
 
-  <div class="grid">
-    <!-- Lewa kolumna -->
+  <div>
     <div class="card">
-      <h2>Lista użytkowników</h2>
-      <div>
-        <h3 class="in">Wewnątrz</h3>
-        <table id="users-in">
-          <thead>cc
-            <tr><th></th><th>Imię</th><th>Nazwisko</th><th>Karta</th></tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-
-        <h3 class="out" style="margin-top: 1.5em;">Poza</h3>
-        <table id="users-out">
-          <thead>
-            <tr><th></th><th>Imię</th><th>Nazwisko</th><th>Karta</th></tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-
-      <button onclick="fetchUsers()">🔄 Odśwież listę</button>
+      <h2>Alert Generalny</h2>
+      <div>Status zagrożenia: <span id="danger-status"></span></div>
+      <div>Odświeżenie za: <span id="general-refresh">-- s</span></div>
+      <button id="reset-btn">⏯️ Reset</button>
     </div>
+    <div>
+      <h2>Status subsystemów</h2>
+      <div class="grid">
+      <!-- Lewa kolumna -->
+      <div class="card">
+        <h2>Lista użytkowników</h2>
+        <div>
+          <h3 class="in">Wewnątrz</h3>
+          <table id="users-in">
+            <thead>
+              <tr><th></th><th>Imię</th><th>Nazwisko</th><th>Karta</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
 
+          <h3 class="out" style="margin-top: 1.5em;">Poza</h3>
+          <table id="users-out">
+            <thead>
+              <tr><th></th><th>Imię</th><th>Nazwisko</th><th>Karta</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
 
-    <!-- Środek -->
-    <div class="card">
-      <h2>PIR i Alarm</h2>
-      <div class="counter">PIR26: <span id="pir26">--</span></div>
-      <div class="counter">PIR16: <span id="pir16">--</span></div>
-
-      <div style="margin-top: 1em;">
-        <h3>Stan alarmu:</h3>
-        <div id="alarm" class="alarm-off">--</div>
+        <button onclick="fetchUsers()">🔄 Odśwież listę</button>
       </div>
 
-      <div style="margin-top: 1em;">
-        <h3>Odświeżenie za:</h3>
-        <div id="refresh">-- s</div>
-      </div>
-    </div>
+      <!-- Środek -->
+      <div class="card">
+        <h2>PIR i Alarm</h2>
+        <div class="counter">PIR26: <span id="pir26">--</span></div>
+        <div class="counter">PIR16: <span id="pir16">--</span></div>
 
-    <!-- Prawa kolumna -->
-    <div class="card">
-      <h2>Podgląd kamery</h2>
-      <button onclick="startStream()">▶️ Start</button>
-      <button onclick="stopStream()">⏹️ Stop</button>
-      <div id="video-container"></div>
+        <div style="margin-top: 1em;">
+          <h3>Stan alarmu:</h3>
+          <div id="alarm" class="alarm-off">--</div>
+                <div style="margin-top: 1em;">
+          <h3>Odświeżenie za:</h3>
+            <div id="refresh">-- s</div>
+          </div>
+          <br>
+          <h2>Stan kamery</h2>
+          <div>Ruch wykryty: <span id="cam-motion">--</span></div>
+          <div>Liczba osób: <span id="cam-people">--</span></div>
+          <div>Odświeżenie za: <span id="cam-refresh">-- s</span></div>
+        </div>
+      </div>
+
+      <!-- Prawa kolumna -->
+      <div class="card">
+        <h2>Podgląd kamery</h2>
+        <button onclick="startStream()">▶️ Start</button>
+        <button onclick="stopStream()">⏹️ Stop</button>
+        <div id="video-container"></div>
+      </div>
     </div>
   </div>
 
   <script>
-    let refreshTime = 60;
+    let pirRefreshTime = 60;
+    let camRefreshTime = 60;
+    let generalRefreshTime = 60;
 
-    async function fetchData() {
+    async function fetchPirData() {
       try {
-        const res = await fetch("/api/status");
+        const res = await fetch("/api/pir_status");
         const data = await res.json();
 
-        document.getElementById("pir26").textContent = data.pir26Counter;
-        document.getElementById("pir16").textContent = data.pir16Counter;
+        document.getElementById("pir26").textContent = data.pir26Counter ?? 0;
+        document.getElementById("pir16").textContent = data.pir16Counter ?? 0;
 
         const alarmEl = document.getElementById("alarm");
         if (data.alarmStatus) {
@@ -181,12 +203,67 @@
           alarmEl.className = "alarm-off";
         }
 
-        refreshTime = data.nextRefreshIn;
+        pirRefreshTime = data.nextRefreshIn > 0 ? data.nextRefreshIn : 0;
       } catch (err) {
-        console.error("Błąd pobierania statusu:", err);
+        console.error("Błąd pobierania statusu PIR:", err);
       }
 
       await fetchUsers();
+    }
+
+    function pirCountdown() {
+      document.getElementById("refresh").textContent = `${pirRefreshTime}s`;
+      pirRefreshTime--;
+      if (pirRefreshTime <= 0) {
+        fetchPirData();
+      }
+    }
+
+    async function fetchCamStatus() {
+      try {
+        const res = await fetch("/api/cam_status");
+        const data = await res.json();
+
+        document.getElementById("cam-motion").textContent = data.motionDetected ? "Tak" : "Nie";
+        document.getElementById("cam-people").textContent = data.peopleCount ?? 0;
+        camRefreshTime = data.nextRefreshIn > 0 ? data.nextRefreshIn : 0;
+      } catch (err) {
+        console.error("Błąd pobierania statusu kamery:", err);
+      }
+    }
+
+    function camCountdown() {
+      document.getElementById("cam-refresh").textContent = `${camRefreshTime}s`;
+      camRefreshTime--;
+      if (camRefreshTime <= 0) {
+        fetchCamStatus();
+      }
+    }
+
+    async function fetchGeneralStatus() {
+      try {
+        const res = await fetch("/api/general_status");
+        const data = await res.json();
+
+          document.getElementById("danger-status").textContent =
+            data.dangerStatus ?"Zagrożenie wszczeto procedury alarmowe" : "Bezpiecznie";
+            if(data.dangerStatus) {
+              document.getElementById("reset-btn").disabled = false
+            } else {
+              document.getElementById("reset-btn").disabled = true
+            }
+        generalRefreshTime = data.nextRefreshIn > 0 ? data.nextRefreshIn : 0;
+      } catch (err) {
+        console.error("Błąd pobierania głównego statusu:", err);
+      }
+    }
+  
+    function generalCountdown() {
+      document.getElementById("general-refresh").textContent = `${generalRefreshTime}s`;
+      generalRefreshTime--;
+      if (generalRefreshTime <= 0) {
+        fetchGeneralStatus();
+      }
     }
 
     async function fetchUsers() {
@@ -238,14 +315,6 @@
       }
     }
 
-    function countdown() {
-      document.getElementById("refresh").textContent = `${refreshTime}s`;
-      refreshTime--;
-      if (refreshTime <= 0) {
-        fetchData();
-      }
-    }
-
     function startStream() {
       document.getElementById('video-container').innerHTML =
         '<img src="/video_feed" style="width:100%;border-radius:10px;">';
@@ -254,9 +323,44 @@
     function stopStream() {
       document.getElementById('video-container').innerHTML = '';
     }
+    
 
-    fetchData();
-    setInterval(countdown, 1000);
+    // Uruchom od razu
+    fetchPirData();
+    fetchCamStatus();
+    fetchGeneralStatus();
+    setInterval(pirCountdown, 1000);
+    setInterval(camCountdown, 1000);
+    setInterval(generalCountdown, 1000);
+
+    async function resetAlarm() {
+      try {
+        const res = await fetch("/api/general_status", {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ generalReset: true })
+        });
+
+        if (!res.ok) {
+          console.error("Błąd podczas resetowania alarmu:", res.status);
+          return;
+        }
+        const data = await res.json();
+        console.log("Reset alarmu OK:", data);
+        // Zablokuj przycisk resetu i odśwież status
+        document.getElementById("reset-btn").disabled = true;
+        // Odśwież natychmiast
+        fetchPirData();
+        fetchCamStatus();
+        generalStatus();
+
+      } catch (err) {
+        console.error("Błąd połączenia przy resecie:", err);
+      }
+    }
+    document.getElementById("reset-btn").addEventListener("click", resetAlarm);
   </script>
 </body>
 </html>

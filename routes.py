@@ -1,5 +1,5 @@
 import time
-from flask import Response, jsonify, render_template
+from flask import Response, jsonify, render_template, request
 
 def register_routes(app, pir_monitor, safety_monitor, cam_monitor, card_monitor):
     @app.route('/pir', methods=['GET'])
@@ -15,9 +15,31 @@ def register_routes(app, pir_monitor, safety_monitor, cam_monitor, card_monitor)
     #         'alarm': alarm_status,
     #         'message': 'Brak aktywności!' if alarm_status else 'System aktywny'
     #     })
+    @app.route("/api/general_status", methods=["GET", "PATCH"])
+    def get_general_alert():
+        if request.method == "PATCH":
+            data = request.get_json(force=True)
 
-    @app.route("/api/status_pir")
-    def get_status():
+            if data.get("generalReset"):
+                safety_monitor.danger = False
+                safety_monitor.main_alert_on = True 
+                print("[API] Reset alarmu — ustawiono danger = False")
+
+                return jsonify({"status": "reset_ok", "danger": safety_monitor.danger})
+
+            return jsonify({"status": "no_action"}), 400
+
+        # GET – zwracanie statusu
+        time_since_last_check = time.time() - safety_monitor.last_alert_check
+        time_until_next = max(0, safety_monitor.alert_interval - time_since_last_check)
+        status = {
+            "dangerStatus": safety_monitor.danger,
+            "nextRefreshIn": int(time_until_next)
+        }
+        return jsonify(status)
+
+    @app.route("/api/pir_status")
+    def get_pir_status():
         status = {
             "pir26Counter": safety_monitor.current_pir26,
             "pir16Counter": safety_monitor.current_pir16,
@@ -30,8 +52,8 @@ def register_routes(app, pir_monitor, safety_monitor, cam_monitor, card_monitor)
     @app.route("/api/cam_status")
     def get_cam_status():
         status = {
-            "motionDetected": getattr(safety_monitor.cam_monitor, "motion_detected", False),
-            "peopleCount": getattr(safety_monitor.cam_monitor, "people_count", 0),
+            "motionDetected": safety_monitor.cam_monitor.motion_saftey,
+            "peopleCount": safety_monitor.cam_monitor.people_count,
             "currentInterval": safety_monitor.cam_interval,
             "nextRefreshIn":  int(safety_monitor.cam_interval - ((time.time() - safety_monitor.last_cam_check) % safety_monitor.cam_interval))
         }
