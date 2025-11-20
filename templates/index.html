@@ -186,7 +186,7 @@
           <h3>Odświeżenie za:</h3>
             <div id="sensor-refresh">-- s</div>
           </div>
-        <button onclick="fetchSensorsData()" style="width: 100%; margin-top: 0.5em;">
+        <button onclick="handleFetchSensorNow()" style="width: 100%; margin-top: 0.5em;">
           🔄 Odśwież Teraz
         </button>
         </div>
@@ -238,9 +238,11 @@
     }
 
     //fetch data pir, cam and alarm
-
+    function handleFetchSensorNow() {
+      fetchSensorsData();
+      sensorRefreshTime = sensorsInterval;
+    }
     async function fetchSensorsData() {
-      console.log("fetchSensorsData()")
       try {
         const res = await fetch("/api/sensors_status");
         const data = await res.json();
@@ -249,7 +251,7 @@
         document.getElementById("pir16").textContent = data.pirData?.pir16Counter ?? 0;
 
         const alarmEl = document.getElementById("alarm");
-        if (data.alarmStatus) {
+        if (data.pirData?.alarmStatus) {
           alarmEl.textContent = "🔴 ALARM !!! ";
           alarmEl.className = "alarm-on";
         } else {
@@ -263,14 +265,12 @@
         console.error("Błąd pobierania głównego statusu:", err);
       }
     }
+
     function sensorsCountdown() {
       document.getElementById("sensor-refresh").textContent = `${sensorRefreshTime}s`;
       sensorRefreshTime--;
-      console.log(sensorRefreshTime)
       if (sensorRefreshTime <= 0) {
-        console.log(sensorRefreshTime <= 0)
-        fetchSensorsData();
-        sensorRefreshTime = sensorsInterval;
+        handleFetchSensorNow();
       }
     }
 
@@ -279,31 +279,29 @@
         const res = await fetch("/api/general_status");
         const data = await res.json();
 
-          document.getElementById("danger-status").textContent =
-            data.dangerStatus ?"Zagrożenie wszczeto procedury alarmowe" : "Bezpiecznie";
+            data.dangerStatus ? "Zagrożenie wszczeto procedury alarmowe" : "Bezpiecznie";
             if(data.dangerStatus) {
               document.getElementById("reset-btn").disabled = false
+              document.getElementById("danger-status").textContent = "Zagrożenie wszczeto procedury alarmowe";
             } else {
               document.getElementById("reset-btn").disabled = true
+              document.getElementById("danger-status").textContent = "Bezpiecznie"
             }
-        console.log(data.nextRefreshIn)
-        generalRefreshTime = data.nextRefreshIn > 0 ? data.nextRefreshIn : 0;
+        generalRefreshTime = data.nextRefreshIn
       } catch (err) {
         console.error("Błąd pobierania głównego statusu:", err);
       }
     }
     function generalCountdown() {
+      if (generalRefreshTime === -1) {
+        return;
+      }
       document.getElementById("general-refresh").textContent = `${generalRefreshTime}s`;
       generalRefreshTime--;
       if (generalRefreshTime <= 0) {
         fetchGeneralStatus();
       }
     }
-
-    fetchSensorsData();
-    fetchGeneralStatus();
-    setInterval(generalCountdown, 1000);
-    setInterval(sensorsCountdown, 1000);
 
     // users fetch
     async function fetchUsers() {
@@ -377,12 +375,23 @@
           console.error("Błąd podczas resetowania alarmu:", res.status);
           return;
         }
-
+        document.getElementById("general-refresh").textContent = `${res.nextRefreshIn}s`;
+        if(res.dangerStatus) {
+          document.getElementById("danger-status").textContent = "Zagrożenie wszczeto procedury alarmowe";
+          document.getElementById("reset-btn").disabled = false
+          document.getElementById("general-refresh").textContent = `${generalRefreshTime}s`;
+        } else {
+          document.getElementById("danger-status").textContent = "Bezpiecznie";
+          document.getElementById("reset-btn").disabled = true
+        }
+        generalRefreshTime = res.nextRefreshIn;
+        sensorRefreshTime = sensorsInterval;
         console.log("Reset alarmu OK");
         document.getElementById("reset-btn").disabled = true;
         // natychmiast odśwież statusy
         fetchSensorsData();
         fetchGeneralStatus();
+
 
       } catch (err) {
         console.error("Błąd połączenia przy resecie:", err);
@@ -390,6 +399,12 @@
     }
     document.getElementById("reset-btn").addEventListener("click", resetAlarm);
 
+    // first fetch and countdowns
+    fetchUsers();
+    fetchSensorsData();
+    fetchGeneralStatus();
+    setInterval(generalCountdown, 1000);
+    setInterval(sensorsCountdown, 1000);
   </script>
 </body>
 </html>

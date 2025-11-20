@@ -27,7 +27,7 @@ class FrameAnalyser:
         self.pose = self.mp_pose.Pose(
             static_image_mode=False,
             model_complexity=0,
-            min_detection_confidence=0.4
+            min_detection_confidence=0.5
         )
         self.max_people = 3  # Maksymalnie szukaj 3 osób
 
@@ -39,9 +39,9 @@ class FrameAnalyser:
         width = x2 - x1
         height = y2 - y1
         
-        # MARGINES - 10%
-        margin_x = int(0.1 * width)
-        margin_y = int(0.1 * height)
+        # MARGINES - 20%
+        margin_x = int(0.2 * width)
+        margin_y = int(0.2 * height)
         
         x1_new = max(0, x1 - margin_x)
         x2_new = min(w, x2 + margin_x)
@@ -144,8 +144,8 @@ class FrameAnalyser:
 
 
 class MotionDetector:
-    def __init__(self, threshold=25, min_area=2000):
-        self.threshold = 10
+    def __init__(self, threshold=25, min_area=5000):
+        self.threshold = 15
         self.min_area = min_area
         self.dead_zone = 30
         self.gaus_blur = 15
@@ -281,13 +281,13 @@ class CAMMonitor:
                 self.stremed_frame = self.placeholder_frame.copy()
                 time.sleep(5)
 
-    # def setSteamFPS(self, fps: int):
-    #     if(fps < 60 and fps > 1):
-    #         self.stream_delay =  1 / fps
-    #         return True
-    #     else:
-    #         self.stream_delay = 0.033
-    #         return False
+    def setSteamFramerate(self, fps: int):
+        if(fps < 60 and fps > 1):
+            self.stream_delay =  1 / fps
+            return True
+        else:
+            self.stream_delay = 0.033
+            return False
 
     def generateFrames(self):
         """Generator dla Flask MJPEG stream"""

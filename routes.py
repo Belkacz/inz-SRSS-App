@@ -27,20 +27,28 @@ def register_routes(app, pir_monitor, safety_monitor, cam_monitor, card_monitor)
             data = request.get_json(force=True)
 
             if data.get("generalReset"):
-                safety_monitor.danger = False
-                safety_monitor.main_alert_on = True 
+
+                safety_monitor.resetData()
+                # safety_monitor.reset_alert_timer() 
                 print("[API] Reset alarmu — ustawiono danger = False")
 
-                return jsonify({"status": "reset_ok", "danger": safety_monitor.danger})
+                return jsonify(
+                    {
+                    "status": "reset_ok",
+                    "danger": safety_monitor.danger,
+                    "nextRefreshIn": safety_monitor.alert_interval
+                    }
+                )
 
             return jsonify({"status": "no_action"}), 400
 
         # GET – zwracanie statusu
         time_since_last_check = time.time() - safety_monitor.last_alert_check
         time_until_next = max(0, safety_monitor.alert_interval - time_since_last_check)
+        next_refresh_in = -1 if safety_monitor.danger else int(time_until_next)
         status = {
             "dangerStatus": safety_monitor.danger,
-            "nextRefreshIn": int(time_until_next)
+            "nextRefreshIn": next_refresh_in
         }
         return jsonify(status)
     

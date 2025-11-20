@@ -11,7 +11,7 @@ import time
 # from dotenv import load_dotenv
 import os
 
-GENERAL_REFRESH = 60
+GENERAL_REFRESH = 30
 
 
 def main():
