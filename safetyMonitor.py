@@ -9,6 +9,12 @@ from cardModule import CardMonitor
 from pirModule import PIRMonitor
 import smtplib
 from settings import settings
+from enum import Enum
+
+class STATUS(Enum):
+    OK = 0
+    WARNING = 1
+    ALARM = 2
 
 def sendAlertEmail(users_in: tuple[list], current_pir26, current_pir16, people_in_danger, frame):
     users_in_danger = []
@@ -77,11 +83,9 @@ def sendAlertEmail(users_in: tuple[list], current_pir26, current_pir16, people_i
     except Exception as e:
         print(f"[SafetyMonitor] Błąd wysyłania maila: {e}", flush=True)
         return False
-
-
 class SafetyMonitor:
     def __init__(self, pir_monitor: PIRMonitor, cam_monitor: CAMMonitor, card_monitor: CardMonitor,
-                alert_interval=(60*5)) -> None:
+                warning_interval=60, alert_interval=(60*5)) -> None:
         """
         Args:
             pir_interval: Jak często sprawdzać PIR (sekundy) - dla UI
@@ -91,8 +95,11 @@ class SafetyMonitor:
         self.pir_monitor = pir_monitor
         self.cam_monitor = cam_monitor
         self.card_monitor = card_monitor
+        self.warning_interval = warning_interval
         self.alert_interval = alert_interval
+        self.main_interval = 10
         self.working = True
+        self.warning_time = None
         
         # Dane z czujników (aktualizowane często)
         self.current_pir26 = 0
@@ -109,6 +116,7 @@ class SafetyMonitor:
         self.general_cam_alarm = False
         
         # Stan głównego zagrożenia (aktualizowany rzadko - dla maili)
+        self.status = STATUS.OK
         self.danger = False
         self.main_alert_on = True
         self.email_sent = False
@@ -129,6 +137,7 @@ class SafetyMonitor:
         self.email_sent = False
         self.pir_alarm = False
         self.general_cam_alarm = False
+        self.status = STATUS.OK
         self.last_alert_check = time.time()
         self.total_pir26 = 0
         self.total_pir16 = 0
@@ -175,7 +184,8 @@ class SafetyMonitor:
         while self.working:
             iteration_time = time.time()
             # SPRAWDZANIE GŁÓWNEGO ALERTU
-            if iteration_time - self.last_alert_check >= self.alert_interval and self.main_alert_on:
+            # if iteration_time - self.last_alert_check >= self.warning_interval and 
+            if self.main_alert_on:
                 self.pir26_leftovers, self.pir16_leftovers = self.getPirData()
                 self.getCamData()
 
@@ -186,6 +196,9 @@ class SafetyMonitor:
                 
                 # DANGER = wszystkie warunki spełnione TERAZ
                 if self.general_cam_alarm and self.total_pir26 == 0 and self.total_pir16 == 0 and self.card_monitor.human_in:
+                    if self.status == STATUS.OK and self.warning_time is None:
+                        self.warning_time = time.time()
+                        self.status = STATUS.WARNING
                     self.danger = True
                     print(f"{'='*60}", flush=True)
                     print(f"[SafetyMonitor] !!!! DANGER !!!!", flush=True)
@@ -193,7 +206,9 @@ class SafetyMonitor:
                     print(f"{'='*60}\n", flush=True)
                     
                     # WYSYŁKA MAILA (tylko raz)
-                    if not self.email_sent:
+                    # if()
+                    if not self.email_sent and self.warning_time is not None and iteration_time - self.warning_time > self.alert_interval:
+                        self.status = STATUS.ALARM
                         print("[SafetyMonitor] Wysyłam mail alarmowy...", flush=True)
                         try:
                             if sendAlertEmail(
@@ -211,6 +226,8 @@ class SafetyMonitor:
                         except Exception as e:
                             print(f"[SafetyMonitor] Wyjątek podczas wysyłki: {e}", flush=True)
                 else:
+                    self.status == STATUS.OK
+                    self.warning_time = None
                     print(f"[SafetyMonitor] Warunki alarmu NIE spełnione - OK", flush=True)
                     if self.danger:
                         print(f"[SafetyMonitor] Sytuacja bezpieczna", flush=True)
@@ -221,7 +238,8 @@ class SafetyMonitor:
                 self.total_pir26 = 0
                 self.total_pir16 = 0
                 self.general_cam_alarm = False
-            if(self.danger == False):
-                time.sleep(self.alert_interval)
-            else:
-                time.sleep(1)
+            time.sleep(self.main_interval)
+            # if(self.danger == False):
+            #     time.sleep(self.alert_interval)
+            # else:
+            #     time.sleep(1)

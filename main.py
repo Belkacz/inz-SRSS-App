@@ -11,7 +11,8 @@ import time
 # from dotenv import load_dotenv
 import os
 
-GENERAL_REFRESH = 30
+WARNING_INTERVAL = 60
+ALARM_REFRESH = 60 * 2.5
 
 
 def main():
@@ -23,7 +24,7 @@ def main():
     card_monitor = CardMonitor(settings.WS_CARD_URL, user_handler)
     cam_monitor = CAMMonitor(settings.WS_CAMERA_URL, card_monitor)
     
-    safety_monitor = SafetyMonitor(pir_monitor, cam_monitor, card_monitor, GENERAL_REFRESH)
+    safety_monitor = SafetyMonitor(pir_monitor, cam_monitor, card_monitor, WARNING_INTERVAL, ALARM_REFRESH)
     register_routes(app, pir_monitor, safety_monitor, cam_monitor, card_monitor)
 
     pir_monitor.startThread()

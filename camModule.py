@@ -145,10 +145,10 @@ class FrameAnalyser:
 
 class MotionDetector:
     def __init__(self, threshold=25, min_area=5000):
-        self.threshold = 15
+        self.threshold = 20
         self.min_area = min_area
         self.dead_zone = 30
-        self.gaus_blur = 15
+        self.gaus_blur = 21
 
     def detectMotion(self, frame, prev_frame) -> bool:
         if frame.shape != prev_frame.shape:
@@ -167,7 +167,7 @@ class MotionDetector:
         thresh = cv2.dilate(thresh, None, iterations=2)
 
         contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        # cv2.imwrite("thresh.jpg", thresh)
+        cv2.imwrite("thresh.jpg", thresh)
         motion_detected = False
         for contour in contours:
             if cv2.contourArea(contour) > self.min_area:
@@ -208,7 +208,7 @@ class CAMMonitor:
         self.frame_counter = 0
         self.analyze_interval = 10  # Co ile klatek analizować
 
-        self.stream_delay = 0.033 # 1/30 sekunda dzielona na fps
+        self.stream_delay = 1/20 # 1/30 sekunda dzielona na fps
         
         print(f"[CAMMonitor] Inicjalizacja: analyze_interval={self.analyze_interval}", flush=True)
 
@@ -252,6 +252,7 @@ class CAMMonitor:
                                     frame, self.prev_frame)
                                 if self.motion_detected:
                                     self.motion_saftey = True
+                                    print(f"[CAMMonitor] self.motion_saftey = {self.motion_saftey}", flush=True)
                                 
                                 # print(f"motion_detected  =  {self.motion_detected}")
                                 # if(self.motion_detected):

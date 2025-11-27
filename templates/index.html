@@ -109,6 +109,19 @@
     .incrementer {
       display: flex;
       align-items: center;
+      gap: 0.5em;
+    }
+    
+    .card-safe {
+      background: #1e1e1e !important;
+    }
+
+    .card-warning {
+      background-color: #3d3a1f !important;
+    }
+
+    .card-danger {
+      background-color: #3d1f1f !important;
     }
 
     @media (max-width: 1000px) {
@@ -122,10 +135,10 @@
   <h1>SRSS Monitoring</h1>
 
   <div>
-    <div class="card">
+    <div class="card" id="general-alerts">
       <h2>Alert Generalny</h2>
-      <div>Status zagrożenia: <span id="danger-status"></span></div>
-      <div>Odświeżenie za: <span id="general-refresh">-- s</span></div>
+      <div>Status: <span id="general-status">--</span></div>
+      <div id="warning-countdown" style="margin-top:0.5em; font-size:1.2em; color:#ffcc00;"></div>
       <button id="reset-btn">⏯️ Reset</button>
     </div>
     <div>
@@ -204,13 +217,28 @@
   </div>
 
   <script>
+
+    function setGeneralAlertClass(mode) {
+      const box = document.getElementById("general-alerts");
+
+      box.classList.remove("card-safe", "card-warning", "card-danger");
+
+      if (mode === "safe") box.classList.add("card-safe");
+      if (mode === "warning") box.classList.add("card-warning");
+      if (mode === "danger") box.classList.add("card-danger");
+    }
+    
     const BASE_REFRESH_INTERVAL = 60;
     let generalRefreshTime = BASE_REFRESH_INTERVAL;
     let sensorRefreshTime = 30;
-    const MIN_INTERVAL = 10;     // 30 sekund
-    const MAX_INTERVAL = 300;    // 5 minut
-    const INTERVAL_STEP = 10;    // Krok 30 sekund
+    const MIN_INTERVAL = 10;
+    const MAX_INTERVAL = 300;
+    const INTERVAL_STEP = 10;
     let sensorsInterval = 30;
+    let warningCountdown = null;
+    let warningTimer = 30;
+    let prevStatus = null;
+    let status = 0;
 
     function formatTime(seconds) {
       if (seconds < 60) return `${seconds}s`;
@@ -219,33 +247,33 @@
       return secs > 0 ? `${minutes}m ${secs}s` : `${minutes}m`;
     }
 
-    // Zwiększ interwał
     function increaseInterval() {
       if (sensorsInterval < MAX_INTERVAL) {
         sensorsInterval += INTERVAL_STEP;
         document.getElementById('interval-display').textContent = formatTime(sensorsInterval);
-        sensorRefreshTime = sensorsInterval; // <- reset countdownsensorRefreshTime
+        sensorRefreshTime = sensorsInterval;
       }
-}
+    }
 
-    // Zmniejsz interwał
     function decreaseInterval() {
       if (sensorsInterval > MIN_INTERVAL) {
         sensorsInterval -= INTERVAL_STEP;
         document.getElementById('interval-display').textContent = formatTime(sensorsInterval);
-        sensorRefreshTime = sensorsInterval; // <- reset countdown
+        sensorRefreshTime = sensorsInterval;
       }
     }
 
-    //fetch data pir, cam and alarm
     function handleFetchSensorNow() {
       fetchSensorsData();
       sensorRefreshTime = sensorsInterval;
     }
+
     async function fetchSensorsData() {
       try {
+        console.log("[DEBUG] Fetching /api/sensors_status");
         const res = await fetch("/api/sensors_status");
         const data = await res.json();
+        console.log("[DEBUG] Sensors data:", data);
 
         document.getElementById("pir26").textContent = data.pirData?.pir26Counter ?? 0;
         document.getElementById("pir16").textContent = data.pirData?.pir16Counter ?? 0;
@@ -262,7 +290,7 @@
         document.getElementById("cam-motion").textContent = data.camData?.motionDetected ? "Tak" : "Nie";
         document.getElementById("cam-people").textContent = data.camData?.peopleCount ?? 0;
       } catch (err) {
-        console.error("Błąd pobierania głównego statusu:", err);
+        console.error("Błąd pobierania statusu sensorów:", err);
       }
     }
 
@@ -274,40 +302,89 @@
       }
     }
 
+    function stopWarningCountdown() {
+      const el = document.getElementById("warning-countdown");
+      if (warningCountdown !== null) {
+        clearInterval(warningCountdown);
+        warningCountdown = null;
+      }
+      el.textContent = "";
+    }
+
+    function startWarningCountdown(countdown) {
+      stopWarningCountdown();
+      warningTimer = countdown;
+      const el = document.getElementById("warning-countdown");
+
+      warningCountdown = setInterval(() => {
+        el.textContent = `⏳ Eskalacja za: ${warningTimer}s`;
+        warningTimer--;
+
+        if (warningTimer <= 0) {
+          stopWarningCountdown();
+          el.textContent = "⚠️ Eskalacja!";
+        }
+      }, 1000);
+    }
+
     async function fetchGeneralStatus() {
       try {
+        console.log("[DEBUG] Fetching /api/general_status");
         const res = await fetch("/api/general_status");
         const data = await res.json();
+        console.log("[DEBUG] General status:", data);
 
-            data.dangerStatus ? "Zagrożenie wszczeto procedury alarmowe" : "Bezpiecznie";
-            if(data.dangerStatus) {
-              document.getElementById("reset-btn").disabled = false
-              document.getElementById("danger-status").textContent = "Zagrożenie wszczeto procedury alarmowe";
-            } else {
-              document.getElementById("reset-btn").disabled = true
-              document.getElementById("danger-status").textContent = "Bezpiecznie"
-            }
-        generalRefreshTime = data.nextRefreshIn
+        const newStatus = data.monitorStatus;
+
+        if (prevStatus === null || prevStatus != newStatus) {
+          switch(newStatus) {
+            case 0:
+              document.getElementById("reset-btn").disabled = true;
+              document.getElementById("general-status").textContent = "Bezpiecznie";
+              stopWarningCountdown();
+              setGeneralAlertClass("safe");
+              break;
+            case 1:
+              document.getElementById("reset-btn").disabled = false;
+              document.getElementById("general-status").textContent = "Ostrzeżenie - nie wykryto ruchu";
+              startWarningCountdown(data.alertCountdown || 60);
+              setGeneralAlertClass("warning");
+              break;
+            case 2:
+              document.getElementById("reset-btn").disabled = false;
+              document.getElementById("general-status").textContent = "Zagrożenie - wszczęto procedury alarmowe";
+              stopWarningCountdown();
+              setGeneralAlertClass("danger");
+              break;
+            default:
+              break;
+          }
+        }
+        prevStatus = newStatus;
+        status = newStatus;
+
+        generalRefreshTime = data.nextRefreshIn || BASE_REFRESH_INTERVAL;
       } catch (err) {
         console.error("Błąd pobierania głównego statusu:", err);
       }
     }
+
     function generalCountdown() {
       if (generalRefreshTime === -1) {
         return;
       }
-      document.getElementById("general-refresh").textContent = `${generalRefreshTime}s`;
       generalRefreshTime--;
       if (generalRefreshTime <= 0) {
         fetchGeneralStatus();
       }
     }
 
-    // users fetch
     async function fetchUsers() {
       try {
+        console.log("[DEBUG] Fetching /users");
         const res = await fetch("/users");
         const data = await res.json();
+        console.log("[DEBUG] Users data:", data);
 
         const usersInBody = document.querySelector("#users-in tbody");
         const usersOutBody = document.querySelector("#users-out tbody");
@@ -362,9 +439,9 @@
       document.getElementById('video-container').innerHTML = '';
     }
 
-    // PATCH
     async function resetAlarm() {
       try {
+        console.log("[DEBUG] Resetting alarm via PATCH");
         const res = await fetch("/api/general_status", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -375,36 +452,35 @@
           console.error("Błąd podczas resetowania alarmu:", res.status);
           return;
         }
-        document.getElementById("general-refresh").textContent = `${res.nextRefreshIn}s`;
-        if(res.dangerStatus) {
-          document.getElementById("danger-status").textContent = "Zagrożenie wszczeto procedury alarmowe";
-          document.getElementById("reset-btn").disabled = false
-          document.getElementById("general-refresh").textContent = `${generalRefreshTime}s`;
-        } else {
-          document.getElementById("danger-status").textContent = "Bezpiecznie";
-          document.getElementById("reset-btn").disabled = true
-        }
-        generalRefreshTime = res.nextRefreshIn;
+        
+        const data = await res.json();
+        console.log("[DEBUG] Reset response:", data);
+        
+        generalRefreshTime = data.nextRefreshIn || BASE_REFRESH_INTERVAL;
         sensorRefreshTime = sensorsInterval;
         console.log("Reset alarmu OK");
         document.getElementById("reset-btn").disabled = true;
-        // natychmiast odśwież statusy
+        
         fetchSensorsData();
         fetchGeneralStatus();
-
-
       } catch (err) {
         console.error("Błąd połączenia przy resecie:", err);
       }
     }
+    
     document.getElementById("reset-btn").addEventListener("click", resetAlarm);
 
-    // first fetch and countdowns
+    // Pierwsze pobranie danych
+    console.log("[DEBUG] Initial data fetch");
     fetchUsers();
     fetchSensorsData();
     fetchGeneralStatus();
+    
+    // Uruchom countdowny
     setInterval(generalCountdown, 1000);
     setInterval(sensorsCountdown, 1000);
+    
+    console.log("[DEBUG] Timers started");
   </script>
 </body>
 </html>

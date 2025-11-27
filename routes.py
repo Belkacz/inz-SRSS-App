@@ -1,5 +1,6 @@
 import time
 from flask import Response, jsonify, render_template, request
+from safetyMonitor import STATUS
 
 def register_routes(app, pir_monitor, safety_monitor, cam_monitor, card_monitor):
     @app.route('/pir', methods=['GET'])
@@ -36,19 +37,22 @@ def register_routes(app, pir_monitor, safety_monitor, cam_monitor, card_monitor)
                     {
                     "status": "reset_ok",
                     "danger": safety_monitor.danger,
-                    "nextRefreshIn": safety_monitor.alert_interval
+                    # "nextRefreshIn": safety_monitor.alert_interval
+                    "nextRefreshIn": safety_monitor.main_interval
                     }
                 )
 
             return jsonify({"status": "no_action"}), 400
 
         # GET – zwracanie statusu
-        time_since_last_check = time.time() - safety_monitor.last_alert_check
-        time_until_next = max(0, safety_monitor.alert_interval - time_since_last_check)
-        next_refresh_in = -1 if safety_monitor.danger else int(time_until_next)
+        warning_passed_time = 0
+        if(safety_monitor.warning_time != None and safety_monitor.status == STATUS.WARNING):
+            warning_passed_time = int(time.time() - safety_monitor.warning_time)
         status = {
+            "monitorStatus" : safety_monitor.status.value,
+            "alertCountdown":  safety_monitor.alert_interval - warning_passed_time,
             "dangerStatus": safety_monitor.danger,
-            "nextRefreshIn": next_refresh_in
+            "nextRefreshIn": safety_monitor.main_interval
         }
         return jsonify(status)
     
