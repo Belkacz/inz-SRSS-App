@@ -8,3 +8,4 @@ typing-extensions
 websocket-client
 opencv-python
 tensorflow
+cryptography
