@@ -1,7 +1,6 @@
 version: "3.9"
-
 services:
-  db:
+  database-service:
     image: mysql:8.1
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
@@ -12,10 +11,15 @@ services:
       - "3306:3306"
     volumes:
       - ./db_init:/docker-entrypoint-initdb.d
-  app:
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  srss-app-service:
     build: .
     environment:
-      DB_URL: ${DB_URL}
+      DB_URL: mysql+pymysql://${MYSQL_USER}:${MYSQL_PASSWORD}@database-service/${MYSQL_DATABASE}
       WS_SERVER_URL: ${WS_SERVER_URL}
       WS_CAMERA_URL: ${WS_CAMERA_URL}
       WS_CARD_URL: ${WS_CARD_URL}
@@ -23,7 +27,7 @@ services:
       EMAIL_PASS: ${EMAIL_PASS}
       RECIPIENT_EMAIL: ${RECIPIENT_EMAIL}
     depends_on:
-      - db
+      database-service:
+        condition: service_healthy
     ports:
       - "5000:5000"
-
