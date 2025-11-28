@@ -7,12 +7,10 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-COPY req_mediapipe.txt .
-RUN pip install --no-cache-dir -r req_mediapipe.txt
+COPY req.txt .
+RUN pip install --no-cache-dir -r req.txt
 
 COPY . .
-
-# RUN touch /app/database.db
 
 EXPOSE 5000
 
