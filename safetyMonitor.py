@@ -148,7 +148,9 @@ class SafetyMonitor:
         # Pobierz dane kamery (NIE resetuj motion_saftey - to robi tylko reset)
         cam_motion = self.cam_monitor.motion_saftey
         people_count = self.cam_monitor.people_count
+        print(f"=" * 60, flush=True)
         print(f"[_collectSensorData] pir26 = {pir26} // pir16 = {pir16} ", flush=True)
+        print(f"=" * 60, flush=True)
         # Aktualizuj snapshot (thread-safe)
         # with self.lock:
         self.ui_people_count = people_count
@@ -198,9 +200,10 @@ class SafetyMonitor:
                 self._collectSensorData()
                 # DANGER = wszystkie warunki spełnione TERAZ
                 if self.total_cam_motion == False and self.total_pir26 == 0 and self.total_pir16 == 0 and self.card_monitor.human_in:
-                    if self.status == STATUS.OK and self.warning_time is None:
+                    print(f"[SafetyMonitor] Warunki alarmu TAK spełnione - RPCEDURA START", flush=True)
+                    if self.warning_time is None and self.status == STATUS.OK:
                         self.warning_time = time.time()
-                    elif iteration_time - self.warning_time > self.warning_interval:
+                    elif self.warning_time is not None  and iteration_time - self.warning_time > self.warning_interval:
                         self.status = STATUS.WARNING
 
                     if not self.email_sent and self.warning_time is not None and iteration_time - self.warning_time > self.alert_interval:
@@ -222,7 +225,7 @@ class SafetyMonitor:
                         except Exception as e:
                             print(f"[SafetyMonitor] Wyjątek podczas wysyłki: {e}", flush=True)
                 else:
-                    self.status == STATUS.OK
+                    self.status = STATUS.OK
                     self.warning_time = None
                     print(f"[SafetyMonitor] Warunki alarmu NIE spełnione - OK", flush=True)
                 

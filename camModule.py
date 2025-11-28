@@ -27,7 +27,7 @@ class FrameAnalyser:
         self.pose = self.mp_pose.Pose(
             static_image_mode=False,
             model_complexity=0,
-            min_detection_confidence=0.5
+            min_detection_confidence=0.7
         )
         self.max_people = 3  # Maksymalnie szukaj 3 osób
 
@@ -58,14 +58,18 @@ class FrameAnalyser:
             working_frame = frame.copy()
             h, w = frame.shape[:2]
             
-            min_box_area = 8000  # Minimalna powierzchnia (odrzuć małe fragmenty)
+            min_box_area = 5000  # Minimalna powierzchnia (odrzuć małe fragmenty)
             min_visibility = 60  # Minimalna visibility w %
             
             for iteration in range(self.max_people):
                 # Debug
-                # if iteration == 0:
-                #     cv2.imwrite("debug_working_frame_iter0.jpg", working_frame)
-                
+
+                if iteration == 0:
+                    cv2.imwrite("debug_working_frame_iter0.jpg", working_frame)
+                if iteration == 1:
+                    cv2.imwrite("debug_working_frame_iter1.jpg", working_frame)
+                if iteration == 2:
+                    cv2.imwrite("debug_working_frame_iter2.jpg", working_frame)
                 # MediaPipe
                 rgb_frame = cv2.cvtColor(working_frame, cv2.COLOR_BGR2RGB)
                 results = self.pose.process(rgb_frame)
@@ -96,10 +100,10 @@ class FrameAnalyser:
                     y2 = int(min(h, max(y_coords)))
 
                     # FILTR 1: Powierzchnia boxa
-                    # box_area = (x2 - x1) * (y2 - y1)
-                    # if box_area < min_box_area:
-                    #     print(f"[FrameAnalyser] ✗ Odrzucono iter {iteration+1}: za mały box ({box_area} px < {min_box_area})", flush=True)
-                    #     break
+                    box_area = (x2 - x1) * (y2 - y1)
+                    if box_area < min_box_area:
+                        print(f"[FrameAnalyser] ✗ Odrzucono iter {iteration+1}: za mały box ({box_area} px < {min_box_area})", flush=True)
+                        break
 
                     # FILTR 2: Visibility
                     visibility_percent = (visibility_sum / landmarks_counter * 100) if landmarks_counter > 0 else 0
