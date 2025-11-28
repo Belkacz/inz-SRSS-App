@@ -11,9 +11,8 @@ import time
 # from dotenv import load_dotenv
 import os
 
-WARNING_INTERVAL = 60
-ALARM_REFRESH = 60 * 2.5
-
+WARNING_INTERVAL = 30
+ALARM_REFRESH = 60 * 1
 
 def main():
     app = Flask(__name__)

@@ -36,9 +36,7 @@ def register_routes(app, pir_monitor, safety_monitor, cam_monitor, card_monitor)
                 return jsonify(
                     {
                     "status": "reset_ok",
-                    "danger": safety_monitor.danger,
-                    # "nextRefreshIn": safety_monitor.alert_interval
-                    "nextRefreshIn": safety_monitor.main_interval
+                    "nextRefreshIn": safety_monitor._main_interval
                     }
                 )
 
@@ -51,25 +49,24 @@ def register_routes(app, pir_monitor, safety_monitor, cam_monitor, card_monitor)
         status = {
             "monitorStatus" : safety_monitor.status.value,
             "alertCountdown":  safety_monitor.alert_interval - warning_passed_time,
-            "dangerStatus": safety_monitor.danger,
-            "nextRefreshIn": safety_monitor.main_interval
+            "nextRefreshIn": safety_monitor._main_interval
         }
         return jsonify(status)
     
     @app.route("/api/sensors_status")
     def get_sensor_status():
-        pir26, pir16 = safety_monitor.getPirData()
-        cam_motion, people_in_danger, cam_alarm =safety_monitor.getCamData()
+        sensors_data = safety_monitor.getSensorData()
         status = {
             "pirData": {
-                "pir26Counter": pir26,
-                "pir16Counter": pir16,
-                "alarmStatus": safety_monitor.pir_alarm,
+                "pir26": sensors_data["pir26"],
+                "pir16": sensors_data["pir16"],
+                "alarmStatus": sensors_data["pir_alarm"],
             },
             "camData": {
-                "motionDetected": cam_motion,
-                "peopleCount": people_in_danger,
-            }
+                "motionDetected": sensors_data['cam_motion'],
+                "peopleCount": sensors_data['people_count'],
+            },
+            "timestamp": sensors_data["timestamp"]
         }
         return jsonify(status)
     

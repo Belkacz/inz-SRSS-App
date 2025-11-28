@@ -49,7 +49,7 @@ class PIRMonitor:
                             # with self.lock:
 
                             self.last_pir_data = data
-                            print(f" data = {data} ")
+                            print(f"[PIRMonitor] data = {data} ")
                             self.pir26Counter = self.pir26Counter + data.get('pir26RisingCounter')
                             self.pir16Counter = self.pir16Counter + data.get('pir26RisingCounter')
                             if self.pir26Counter > 99:

@@ -185,6 +185,8 @@
           <div>
             Liczba osób: <span id="cam-people">--</span>
           </div>
+          <div id="cam-alarm" style="margin-top: 0.5em;">--</div>
+          <div class="timestamp" id="sensor-timestamp">Ostatnia aktualizacja: --</div>
         <div style="margin-top: 1em;">
         <div class="interval-control">
             <p>Aktualne odświeżanie</p>
@@ -275,12 +277,12 @@
         const data = await res.json();
         console.log("[DEBUG] Sensors data:", data);
 
-        document.getElementById("pir26").textContent = data.pirData?.pir26Counter ?? 0;
-        document.getElementById("pir16").textContent = data.pirData?.pir16Counter ?? 0;
+        document.getElementById("pir26").textContent = data.pirData?.pir26 ?? 0;
+        document.getElementById("pir16").textContent = data.pirData?.pir16 ?? 0;
 
         const alarmEl = document.getElementById("alarm");
         if (data.pirData?.alarmStatus) {
-          alarmEl.textContent = "🔴 ALARM !!! ";
+          alarmEl.textContent = "🔴 Brak Ruchu";
           alarmEl.className = "alarm-on";
         } else {
           alarmEl.textContent = "🟢 OK ";
@@ -289,6 +291,21 @@
 
         document.getElementById("cam-motion").textContent = data.camData?.motionDetected ? "Tak" : "Nie";
         document.getElementById("cam-people").textContent = data.camData?.peopleCount ?? 0;
+
+        const camAlarmElement = document.getElementById("cam-alarm");
+        if (!data.camData?.motionDetected) {
+          camAlarmElement.textContent = "🔴 Brak Ruchu";
+          camAlarmElement.className = "alarm-on";
+        } else {
+          camAlarmElement.textContent = "🟢 OK";
+          camAlarmElement.className = "alarm-off";
+        }
+        if (data.timestamp) {
+          const date = new Date(data.timestamp * 1000);
+          document.getElementById("sensor-timestamp").textContent = 
+            `Ostatnia aktualizacja: ${date.toLocaleTimeString('pl-PL')}`;
+        }
+
       } catch (err) {
         console.error("Błąd pobierania statusu sensorów:", err);
       }
@@ -317,12 +334,12 @@
       const el = document.getElementById("warning-countdown");
 
       warningCountdown = setInterval(() => {
-        el.textContent = `⏳ Eskalacja za: ${warningTimer}s`;
+        el.textContent = `Rozpoczecie procedury Alarmowej za: ${warningTimer}s`;
         warningTimer--;
 
         if (warningTimer <= 0) {
           stopWarningCountdown();
-          el.textContent = "⚠️ Eskalacja!";
+          el.textContent = "Procedura alarmowa rozpoczęta, poinformpowano niezbędne służby!";
         }
       }, 1000);
     }
@@ -345,7 +362,7 @@
               setGeneralAlertClass("safe");
               break;
             case 1:
-              document.getElementById("reset-btn").disabled = false;
+              document.getElementById("reset-btn").disabled = true;
               document.getElementById("general-status").textContent = "Ostrzeżenie - nie wykryto ruchu";
               startWarningCountdown(data.alertCountdown || 60);
               setGeneralAlertClass("warning");
