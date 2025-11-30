@@ -112,7 +112,7 @@ class FrameAnalyser:
 
 
 class MotionDetector:
-    def __init__(self, threshold=25, min_area=5000):
+    def __init__(self, threshold=25, min_area=2000):
         self.threshold = 20
         self.min_area = min_area
         self.dead_zone = 30
@@ -131,9 +131,8 @@ class MotionDetector:
         frame_delta = cv2.absdiff(prev_gray, gray)
         _, thresh = cv2.threshold(frame_delta, self.threshold, 255, cv2.THRESH_BINARY)
         thresh = cv2.dilate(thresh, None, iterations=2)
-
+        # cv2.imwrite("thresh.jpg", thresh)
         contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        
         motion_detected = False
         for contour in contours:
             if cv2.contourArea(contour) > self.min_area:
@@ -147,6 +146,7 @@ class CAMMonitor:
     def __init__(self, ws_url: str, card_monitor: CardMonitor, 
                  detect_motion=True, find_people=True) -> None:
         self.ws_url = ws_url
+        self.cam_connected = False
         self.card_monitor = card_monitor
         self.thread = threading.Thread(target=self._ws_listener, daemon=True)
         self.active = True
@@ -181,6 +181,7 @@ class CAMMonitor:
             try:
                 ws = websocket.WebSocket()
                 ws.connect(self.ws_url)
+                self.cam_connected = True
                 print(f"[CAMMonitor] ✓ Połączono z {self.ws_url}", flush=True)
                 
                 while self.active:
@@ -197,6 +198,13 @@ class CAMMonitor:
                             if self.frame_counter >= 60:
                                 self.frame_counter = 0
                             
+                            if self.detect_motion and self.prev_frame is not None:
+                                self.motion_detected = self.motion_detector.detectMotion(
+                                    frame, self.prev_frame)
+                                if self.motion_detected:
+                                    self.motion_saftey = True
+                            self.prev_frame = frame
+
                             # Sprawdź czy ktoś jest
                             if not self.card_monitor.human_in:
                                 self.people_count = 0
@@ -204,26 +212,20 @@ class CAMMonitor:
                                 self.stremed_frame = self.frame_analyser.DrawBox(frame, [], 0)
                                 continue
 
-                            if self.detect_motion and self.prev_frame is not None:
-                                self.motion_detected = self.motion_detector.detectMotion(
-                                    frame, self.prev_frame)
-                                if self.motion_detected:
-                                    self.motion_saftey = True
-
                             if self.find_people and self.frame_counter % self.analyze_interval == 0:
                                 self.people_count, self.detection_boxes = self.frame_analyser.FindPeople(frame)
                             
-                            self.prev_frame = frame
+                            
                             self.stremed_frame = self.frame_analyser.DrawBox(
                                 frame, self.detection_boxes, self.people_count
                             )
-                            
                         else:
                             print("[CAMMonitor] Błąd dekodowania klatki", flush=True)
                             self.stremed_frame = self.placeholder_frame.copy()
 
-            except Exception as e:
-                print(f"[CAMMonitor] BŁĄD: {e}", flush=True)
+            except Exception as error:
+                self.cam_connected = False
+                print(f"[CAMMonitor] BŁĄD: {error}", flush=True)
                 import traceback
                 traceback.print_exc()
                 self.stremed_frame = self.placeholder_frame.copy()

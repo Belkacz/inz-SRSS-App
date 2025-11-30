@@ -124,6 +124,10 @@
       background-color: #3d1f1f !important;
     }
 
+        .interval-control {
+      padding-top: 1em;
+    }
+
     @media (max-width: 1000px) {
       .grid {
         grid-template-columns: 1fr;
@@ -171,34 +175,37 @@
       <!-- Środek -->
       <div class="card">
         <h2>PIR i Cam status</h2>
-        <div class="counter">PIR26: <span id="pir26">--</span></div>
-        <div class="counter">PIR16: <span id="pir16">--</span></div>
-
         <div style="margin-top: 1em;">
-          <h3>Stan alarmu:</h3>
-          <div id="alarm" class="alarm-off">--</div>
+          <div class="pir-data-box">
+            <div class="counter">PIR26: <span id="pir26">--</span></div>
+            <div class="counter">PIR16: <span id="pir16">--</span></div>
+            <div id="pir-alarm" class="alarm-off">--</div>
+          </div>
           <br>
-          <h2>Stan kamery</h2>
-          <div>
-            Ruch wykryty: <span id="cam-motion">--</span>
+          <div class="cam-data-box">
+            <h2>Stan kamery</h2>
+            <div>
+              Ruch wykryty: <span id="cam-motion">--</span>
+            </div>
+            <div>
+              Liczba osób: <span id="cam-people">--</span>
+            </div>
+            <div id="cam-alarm" style="margin-top: 0.5em;">--</div>
           </div>
-          <div>
-            Liczba osób: <span id="cam-people">--</span>
-          </div>
-          <div id="cam-alarm" style="margin-top: 0.5em;">--</div>
-          <div class="timestamp" id="sensor-timestamp">Ostatnia aktualizacja: --</div>
+          <br>
+          <div class="timestamp" id="sensor-timestamp">Ostatnia aktualizacja sensorów: --</div>
         <div style="margin-top: 1em;">
-        <div class="interval-control">
-            <p>Aktualne odświeżanie</p>
+          <div class="interval-control">
+            <h4>Aktualne odświeżanie</h4>
             <div class="incrementer">
               <button onclick="decreaseInterval()">➖</button>
               <div>
                 <div class="interval-display" id="interval-display">30s</div>
               </div>
               <button onclick="increaseInterval()">➕</button>
-            </div> 
+          </div> 
         </div>
-          <h3>Odświeżenie za:</h3>
+          <h4>Odświeżenie za:</h4>
             <div id="sensor-refresh">-- s</div>
           </div>
         <button onclick="handleFetchSensorNow()" style="width: 100%; margin-top: 0.5em;">
@@ -277,33 +284,53 @@
         const data = await res.json();
         console.log("[DEBUG] Sensors data:", data);
 
-        document.getElementById("pir26").textContent = data.pirData?.pir26 ?? 0;
-        document.getElementById("pir16").textContent = data.pirData?.pir16 ?? 0;
-
-        const alarmEl = document.getElementById("alarm");
-        if (data.pirData?.alarmStatus) {
-          alarmEl.textContent = "🔴 Brak Ruchu";
-          alarmEl.className = "alarm-on";
+        pirConnected = data.pirData?.pirConnected
+        const pirBox = document.querySelector(".pir-data-box");
+        if (pirConnected) {
+        // PIR połączony
+          pirBox.innerHTML = `
+            <div class="counter">PIR26: <span id="pir26">${data.pirData?.pir26 ?? 0}</span></div>
+            <div class="counter">PIR16: <span id="pir16">${data.pirData?.pir16 ?? 0}</span></div>
+            <div id="pir-alarm" class="${data.pirData?.alarmStatus ? 'alarm-on' : 'alarm-off'}">
+              ${data.pirData?.alarmStatus ? '🔴 Brak Ruchu' : '🟢 OK'}
+            </div>
+          `;
         } else {
-          alarmEl.textContent = "🟢 OK ";
-          alarmEl.className = "alarm-off";
+          // PIR rozłączony - pokaż komunikat
+          pirBox.innerHTML = `
+            <div class="disconnected-message">
+              Brak Połączenia z serwisem Pir
+            </div>
+          `;
         }
 
-        document.getElementById("cam-motion").textContent = data.camData?.motionDetected ? "Tak" : "Nie";
-        document.getElementById("cam-people").textContent = data.camData?.peopleCount ?? 0;
-
-        const camAlarmElement = document.getElementById("cam-alarm");
-        if (!data.camData?.motionDetected) {
-          camAlarmElement.textContent = "🔴 Brak Ruchu";
-          camAlarmElement.className = "alarm-on";
-        } else {
-          camAlarmElement.textContent = "🟢 OK";
-          camAlarmElement.className = "alarm-off";
-        }
+        const camConnected = data.camData?.camConnected;
+        const camBox = document.querySelector(".cam-data-box");
+        if (camConnected) {
+              // Kamera połączona - pokaż normalne dane
+              camBox.innerHTML = `
+                <h2>Stan kamery</h2>
+                <div>Ruch wykryty: <span id="cam-motion">${data.camData?.motionDetected ? 'Tak' : 'Nie'}</span></div>
+                <div>Liczba osób: <span id="cam-people">${data.camData?.peopleCount ?? 0}</span></div>
+                <div id="cam-alarm" class="${!data.camData?.motionDetected ? 'alarm-on' : 'alarm-off'}" style="margin-top: 0.5em;">
+                  ${!data.camData?.motionDetected ? '🔴 Brak Ruchu' : '🟢 OK'}
+                </div>
+              `;
+            } else {
+              // Kamera rozłączona - pokaż komunikat
+              camBox.innerHTML = `
+                <h2>Stan kamery</h2>
+                <div class="disconnected-message">
+                  Brak Połączenia z serwisem Kamery
+                </div>
+              `;
+            }
+        sensorTimestamp = document.getElementById("sensor-timestamp")
         if (data.timestamp) {
           const date = new Date(data.timestamp * 1000);
-          document.getElementById("sensor-timestamp").textContent = 
-            `Ostatnia aktualizacja: ${date.toLocaleTimeString('pl-PL')}`;
+          sensorTimestamp.textContent = `Ostatnia aktualizacja: ${date.toLocaleTimeString('pl-PL')}`;
+        } else {
+          sensorTimestamp.textContent = `Brak danych`;
         }
 
       } catch (err) {
@@ -316,6 +343,7 @@
       sensorRefreshTime--;
       if (sensorRefreshTime <= 0) {
         handleFetchSensorNow();
+        fetchUsers();
       }
     }
 

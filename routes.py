@@ -1,5 +1,6 @@
 import time
 from flask import Response, jsonify, render_template, request
+import camModule
 from safetyMonitor import STATUS
 
 def register_routes(app, pir_monitor, safety_monitor, cam_monitor, card_monitor):
@@ -61,10 +62,12 @@ def register_routes(app, pir_monitor, safety_monitor, cam_monitor, card_monitor)
                 "pir26": sensors_data["pir26"],
                 "pir16": sensors_data["pir16"],
                 "alarmStatus": sensors_data["pir_alarm"],
+                "pirConnected": pir_monitor.pir_connected
             },
             "camData": {
                 "motionDetected": sensors_data['cam_motion'],
                 "peopleCount": sensors_data['people_count'],
+                "camConnected": cam_monitor.cam_connected
             },
             "timestamp": sensors_data["timestamp"]
         }

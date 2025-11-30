@@ -8,6 +8,7 @@ import time
 class PIRMonitor:
     def __init__(self, ws_url: str) -> None:
         self.ws_url = ws_url
+        self.pir_connected = False
         self.last_pir_data = {}
         self.active = True
         # self.lock = threading.Lock()
@@ -40,9 +41,11 @@ class PIRMonitor:
             try:
                 ws = websocket.WebSocket()
                 ws.connect(self.ws_url)
+                self.pir_connected = True
                 print(f"[INFO] Połączono z {self.ws_url}")
                 while self.active:
                     msg = ws.recv()
+                    print(f"[PIRMonitor] msg = {msg} ")
                     if msg:
                         try:
                             data = json.loads(msg)
@@ -59,6 +62,7 @@ class PIRMonitor:
                             print(f"[dane PIR] {data}")
                         except Exception:
                             print(f"[RAW] {msg}")
-            except Exception as e:
-                print(f"[BŁĄD] {e}, ponawiam połączenie za 5s...")
+            except Exception as error:
+                self.pir_connected = False
+                print(f"[BŁĄD] {error}, ponawiam połączenie za 5s...")
                 time.sleep(5)
