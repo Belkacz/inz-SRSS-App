@@ -44,9 +44,9 @@ class FrameAnalyser:
         detections = self.detection_function(input_tensor)
 
         # Wyciągnij wyniki
-        boxes = detections['detection_boxes'][0].numpy()       # [num,4]
-        scores = detections['detection_scores'][0].numpy()     # [num]
-        classes = detections['detection_classes'][0].numpy()   # [num]
+        boxes = detections['detection_boxes'][0].numpy()
+        scores = detections['detection_scores'][0].numpy()
+        classes = detections['detection_classes'][0].numpy()
 
         results = []
         for box, score, class_id in zip(boxes, scores, classes):
@@ -65,27 +65,6 @@ class FrameAnalyser:
         results = sorted(results, key=lambda b: b.conf, reverse=True)[:self.max_people]
         return len(results), results
 
-    def erase_person(self, img, pt1, pt2):
-        x1, y1 = pt1
-        x2, y2 = pt2
-        
-        h, w = img.shape[:2]
-        width = x2 - x1
-        height = y2 - y1
-        
-        # MARGINES - 20%
-        margin_x = int(0.2 * width)
-        margin_y = int(0.2 * height)
-        
-        x1_new = max(0, x1 - margin_x)
-        x2_new = min(w, x2 + margin_x)
-        y1_new = max(0, y1 - margin_y)
-        y2_new = min(h, y2 + margin_y)
-        
-        # Czarny prostokąt
-        cv2.rectangle(img, (x1_new, y1_new), (x2_new, y2_new), (0, 0, 0), -1)
-        return img
-
     def DrawBox(self, frame, boxes: List[Box], people_count):
         line_people_size = 2
         line_conf_size = 1
@@ -93,13 +72,13 @@ class FrameAnalyser:
         
         if people_count > 0:
             for idx, box in enumerate(boxes):
-                # Wybierz kolor dla danej osoby
+                # dobór koloru prostokąta
                 color = PERSON_COLORS[idx] if idx < len(PERSON_COLORS) else (0, 255, 0)
                 
-                # Narysuj prostokąt
+                # Rysowanie prostąkąta
                 cv2.rectangle(drawed_frame, (box.x1, box.y1), (box.x2, box.y2), color, 2)
                 
-                # Dodaj tekst z pewnością
+                # Dodaje tekst
                 label = f"Person {idx+1}: {box.conf:.2f}"
                 cv2.putText(drawed_frame, label, (box.x1, box.y1 - 10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, line_conf_size)
@@ -112,10 +91,9 @@ class FrameAnalyser:
 
 
 class MotionDetector:
-    def __init__(self, threshold=25, min_area=2000):
+    def __init__(self, threshold=25, min_area=200):
         self.threshold = 20
         self.min_area = min_area
-        self.dead_zone = 30
         self.gaus_blur = 21
 
     def detectMotion(self, frame, prev_frame) -> bool:
@@ -131,14 +109,14 @@ class MotionDetector:
         frame_delta = cv2.absdiff(prev_gray, gray)
         _, thresh = cv2.threshold(frame_delta, self.threshold, 255, cv2.THRESH_BINARY)
         thresh = cv2.dilate(thresh, None, iterations=2)
-        # cv2.imwrite("thresh.jpg", thresh)
+        cv2.imwrite("thresh.jpg", thresh)
         contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         motion_detected = False
         for contour in contours:
+            # print(f"[MotionDetector] cv2.contourArea(contour) = {cv2.contourArea(contour)}")
             if cv2.contourArea(contour) > self.min_area:
                 motion_detected = True
                 break
-        
         return motion_detected
 
 
@@ -164,6 +142,7 @@ class CAMMonitor:
         self.frames_with_movement = 0
         self.people_count = 0
         self.frame_counter = 0
+        self.no_frame_counter = 0
         self.detection_boxes = []
         
         self.analyze_interval = 10  # Co ile klatek analizować
@@ -194,6 +173,7 @@ class CAMMonitor:
                         frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
                         
                         if frame is not None:
+                            self.no_frame_counter = 0
                             self.frame_counter += 1
                             if self.frame_counter >= 60:
                                 self.frame_counter = 0
@@ -214,14 +194,16 @@ class CAMMonitor:
 
                             if self.find_people and self.frame_counter % self.analyze_interval == 0:
                                 self.people_count, self.detection_boxes = self.frame_analyser.FindPeople(frame)
-                            
-                            
+
                             self.stremed_frame = self.frame_analyser.DrawBox(
                                 frame, self.detection_boxes, self.people_count
                             )
                         else:
+                            self.no_frame_counter += 1
                             print("[CAMMonitor] Błąd dekodowania klatki", flush=True)
-                            self.stremed_frame = self.placeholder_frame.copy()
+                            if self.no_frame_counter > 30:
+                                self.stremed_frame = self.placeholder_frame.copy()
+                                if self.no_frame_counter > 99 : self.no_frame_counter = 31
 
             except Exception as error:
                 self.cam_connected = False

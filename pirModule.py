@@ -45,24 +45,24 @@ class PIRMonitor:
                 print(f"[INFO] Połączono z {self.ws_url}")
                 while self.active:
                     msg = ws.recv()
-                    print(f"[PIRMonitor] msg = {msg} ")
+                    # print(f"[PIRMonitor] msg = {msg} ")
                     if msg:
                         try:
                             data = json.loads(msg)
                             # with self.lock:
 
                             self.last_pir_data = data
-                            print(f"[PIRMonitor] data = {data} ")
+                            # print(f"[PIRMonitor] data = {data} ")
                             self.pir26Counter = self.pir26Counter + data.get('pir26RisingCounter')
                             self.pir16Counter = self.pir16Counter + data.get('pir26RisingCounter')
                             if self.pir26Counter > 99:
                                 self.pir26Counter = 1
                             if self.pir16Counter > 99:
                                 self.pir16Counter = 1
-                            print(f"[dane PIR] {data}")
-                        except Exception:
-                            print(f"[RAW] {msg}")
+                            # print(f"[dane PIR] {data}")
+                        except Exception as json_error:
+                            print(f"[PIRMonitor] Bład dekodowania Json: {json_error}")
             except Exception as error:
                 self.pir_connected = False
-                print(f"[BŁĄD] {error}, ponawiam połączenie za 5s...")
+                print(f"[PIRMonitor] Błąd : {error}, ponawiam połączenie za 5s...")
                 time.sleep(5)
