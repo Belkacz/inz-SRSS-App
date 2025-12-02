@@ -56,7 +56,6 @@ class UserHandler:
                     privilage_id_fk=None,
                     )
                 users_in.append(unknown_user)
-        print(f'[CARD MODULE ] users_in : {users_in}')
         return users_in, users_out
 
 
