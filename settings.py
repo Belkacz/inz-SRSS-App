@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# klasa ustawień zaczytująca dane z środowiska
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",

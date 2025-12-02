@@ -9,9 +9,7 @@ class PIRMonitor:
     def __init__(self, ws_url: str) -> None:
         self.ws_url = ws_url
         self.pir_connected = False
-        self.last_pir_data = {}
         self.active = True
-        # self.lock = threading.Lock()
         self.thread = threading.Thread(target=self._ws_listener, daemon=True)
         self.pir26Counter = 0
         self.pir16Counter = 0
@@ -19,9 +17,6 @@ class PIRMonitor:
     def startThread(self):
         self.thread.start()
 
-    def get_data(self):
-        # with self.lock:
-        return dict(self.last_pir_data)
     def getPirCounter(self, pir: Number) -> Number:
         match pir:
             case 26:
@@ -31,35 +26,28 @@ class PIRMonitor:
             case _:
                 return 0
 
+    # metoda do restowania wartości pir
     def restCounters(self):
         self.pir26Counter = 0
         self.pir16Counter = 0
 
     def _ws_listener(self):
-        print("[DEBUG] Wątek ws_listener wystartował!", flush=True)
         while self.active:
             try:
                 ws = websocket.WebSocket()
                 ws.connect(self.ws_url)
                 self.pir_connected = True
-                print(f"[INFO] Połączono z {self.ws_url}")
                 while self.active:
                     msg = ws.recv()
-                    # print(f"[PIRMonitor] msg = {msg} ")
                     if msg:
                         try:
                             data = json.loads(msg)
-                            # with self.lock:
-
-                            self.last_pir_data = data
-                            # print(f"[PIRMonitor] data = {data} ")
                             self.pir26Counter = self.pir26Counter + data.get('pir26RisingCounter')
-                            self.pir16Counter = self.pir16Counter + data.get('pir26RisingCounter')
+                            self.pir16Counter = self.pir16Counter + data.get('pir16RisingCounter')
                             if self.pir26Counter > 99:
-                                self.pir26Counter = 1
+                                self.pir26Counter = 99
                             if self.pir16Counter > 99:
-                                self.pir16Counter = 1
-                            # print(f"[dane PIR] {data}")
+                                self.pir16Counter = 99
                         except Exception as json_error:
                             print(f"[PIRMonitor] Bład dekodowania Json: {json_error}")
             except Exception as error:

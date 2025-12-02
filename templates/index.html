@@ -124,8 +124,12 @@
       background-color: #3d1f1f !important;
     }
 
-        .interval-control {
+    .interval-control {
       padding-top: 1em;
+    }
+
+    .counter, #pir-alarm, #cam-alarm, .disconnected-message, .cam-data-box div {
+      line-height: 1.6em;
     }
 
     @media (max-width: 1000px) {
@@ -333,8 +337,8 @@
           sensorTimestamp.textContent = `Brak danych`;
         }
 
-      } catch (err) {
-        console.error("Błąd pobierania statusu sensorów:", err);
+      } catch (error) {
+        console.error("Błąd pobierania statusu sensorów:", error);
       }
     }
 
@@ -409,8 +413,8 @@
         status = newStatus;
 
         generalRefreshTime = data.nextRefreshIn || BASE_REFRESH_INTERVAL;
-      } catch (err) {
-        console.error("Błąd pobierania głównego statusu:", err);
+      } catch (error) {
+        console.error("Błąd pobierania głównego statusu:", error);
       }
     }
 
@@ -426,11 +430,8 @@
 
     async function fetchUsers() {
       try {
-        console.log("[DEBUG] Fetching /users");
         const res = await fetch("/users");
         const data = await res.json();
-        console.log("[DEBUG] Users data:", data);
-
         const usersInBody = document.querySelector("#users-in tbody");
         const usersOutBody = document.querySelector("#users-out tbody");
 
@@ -467,11 +468,11 @@
           tableBody.appendChild(detailsRow);
         }
 
-        data.users_in.forEach(u => createUserRow(u, usersInBody));
-        data.users_out.forEach(u => createUserRow(u, usersOutBody));
+        data.usersIn.forEach(u => createUserRow(u, usersInBody));
+        data.usersOut.forEach(u => createUserRow(u, usersOutBody));
 
-      } catch (err) {
-        console.error("Błąd pobierania użytkowników:", err);
+      } catch (error) {
+        console.error("Błąd pobierania użytkowników:", error);
       }
     }
 
@@ -508,8 +509,8 @@
         
         fetchSensorsData();
         fetchGeneralStatus();
-      } catch (err) {
-        console.error("Błąd połączenia przy resecie:", err);
+      } catch (error) {
+        console.error("Błąd połączenia przy resecie:", error);
       }
     }
     
