@@ -56,7 +56,7 @@ class UserHandler:
                     privilage_id_fk=None,
                     )
                 users_in.append(unknown_user)
-        # print(f'[CARD MODULE] users_in: {users_in}', flush=True)
+        print(f'[CARD MODULE ] users_in : {users_in}')
         return users_in, users_out
 
 
@@ -70,6 +70,7 @@ class CardMonitor:
         self.user_handler = user_handler
         self.human_in = False
         
+        # Inicjalizuj jako puste listy
         self.users_in = []
         self.users_out = []
         
@@ -79,96 +80,58 @@ class CardMonitor:
         self.thread.start()
 
     def _ws_listener(self):
-        print("[CardMonitor] Wątek ws_listener wystartował!", flush=True)
+        print("[DEBUG] Wątek ws_listener wystartował!", flush=True)
         while self.active:
-            ws = None
             try:
-                # print(f"[CardMonitor] Łączę z {self.ws_url}...", flush=True)
                 ws = websocket.WebSocket()
-                
-                # ZMIANA 1: Ustaw timeout na połączeniu
-                # ws.settimeout(2.0)  # 2 sekundy timeout
-                
                 ws.connect(self.ws_url)
-                print(f"[CardMonitor] ✓ Połączono z {self.ws_url}", flush=True)
+                print(f"[CardMonitor] Połączono z {self.ws_url}")
                 self.connected = True
-
-                while self.active and self.connected:
-                    try:
-                        # ZMIANA 2: recv() teraz ma timeout dzięki settimeout()
-                        msg = ws.recv()
-                        
-                        if not msg:
-                            continue
-                        
-                        last_message_time = time.time()
-                        
+                while self.connected:
+                    msg = ws.recv()
+                    if not msg:
+                        continue
+                    if msg:
                         try:
                             data = json.loads(msg)
-                            # print(f"[CardMonitor] Otrzymano: {data}", flush=True)
-
+                            print(f"[DEBUG 1] Parsed JSON: {data}", flush=True)
+                            
+                            cardCounter = data.get('cardCounter')
+                            print(f"[DEBUG 2] cardCounter: {cardCounter}", flush=True)
+                            
                             self.card_list = []
                             for key, value in data.items():
                                 if re.match(r"card\d+", key) and key != "cardCounter":
                                     self.card_list.append(value)
-                            
-                            # print(f'[CardMonitor] Lista kart: {self.card_list}', flush=True)
+                            print(f'[DEBUG 3] self.card_list : {self.card_list}', flush=True)
                             
                             if len(self.card_list) > 0:
                                 self.human_in = True
                             else:
                                 self.human_in = False
+                            print(f"[DEBUG 4] self.human_in: {self.human_in}", flush=True)
                             
-                            # print(f"[CardMonitor] human_in: {self.human_in}", flush=True)
-                            
-                            # Pobierz użytkowników z bazy
+                            # Teraz dopiero pobierz użytkowników z bazy
                             try:
+                                print("[DEBUG 5] Pobieram użytkowników z bazy...", flush=True)
                                 db_users = self.user_handler.get_users()
-                                # print(f"[CardMonitor] Użytkowników w bazie: {len(db_users)}", flush=True)
+                                print(f"[DEBUG 6] db_users count: {len(db_users)}", flush=True)
                                 
                                 self.users_in, self.users_out = self.user_handler.create_list_in_n_out(
                                     self.card_list, db_users
                                 )
-                                # print(f"[CardMonitor] W środku: {len(self.users_in)}, Na zewnątrz: {len(self.users_out)}", flush=True)
+                                print(f"[DEBUG 7] users_in: {len(self.users_in)}, users_out: {len(self.users_out)}", flush=True)
                             except Exception as db_error:
-                                print(f"[CardMonitor] BŁĄD bazy danych: {db_error}", flush=True)
-                                self.users_in, self.users_out = self.user_handler.create_list_in_n_out(
-                                    self.card_list, []
-                                )
+                                print(f"[BŁĄD bazy danych] {db_error}", flush=True)
+                                import traceback
+                                traceback.print_exc()
                             
-                        except json.JSONDecodeError as json_error:
-                            print(f"[CardMonitor] BŁĄD JSON: {json_error}", flush=True)
-                            # print(f"[CardMonitor] RAW: {msg}", flush=True)
-                    
-                    except websocket.WebSocketTimeoutException:
-                        # ZMIANA 3: Timeout jest NORMALNY - nie loguj jako błąd
-                        # Sprawdź czy połączenie jeszcze żyje
-                        current_time = time.time()
-                        if current_time - last_message_time > 60:
-                            print(f"[CardMonitor] Brak wiadomości przez 60s, reconnect...", flush=True)
-                            break
-                        # Kontynuuj pętlę - to normalny timeout
-                        continue
-                    
-                    except Exception as inner_error:
-                        print(f"[CardMonitor] Błąd w recv(): {inner_error}", flush=True)
-                        break
+                            print(f"[RAW] {msg}", flush=True)
+                            
+                        except json.JSONDecodeError as e:
+                            print(f"[BŁĄD JSON] {e}", flush=True)
+                            print(f"[RAW] {msg}", flush=True)
             except Exception as exception:
-                print(f"[CardMonitor] BŁĄD: {exception}", flush=True)
+                print(f"[CardMonitor] [BŁĄD] {exception}, ponawiam połączenie za 5s...", flush=True)
                 self.connected = False
-            
-            finally:
-                # ZMIANA 4: Zawsze zamknij WebSocket
-                if ws:
-                    try:
-                        ws.close()
-                    except:
-                        pass
-                    ws = None
-                self.connected = False
-                
-                if self.active:
-                    print("[CardMonitor] Ponawiam połączenie za 5s...", flush=True)
-                    time.sleep(5)
-        
-        print("[CardMonitor] Wątek zakończony", flush=True)
+                time.sleep(5)

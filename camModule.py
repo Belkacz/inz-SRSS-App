@@ -146,7 +146,7 @@ class CAMMonitor:
         self.detection_boxes = []
         
         self.analyze_interval = 10  # Co ile klatek analizować
-        self.stream_delay = 1/20  # FPS streamu
+        self.stream_delay = 1/15  # FPS streamu
         
         print(f"[CAMMonitor] Inicjalizacja: analyze_interval={self.analyze_interval}", flush=True)
 
