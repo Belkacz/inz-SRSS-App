@@ -169,15 +169,15 @@ class CAMMonitor:
                 self.last_motion_time = datetime.fromtimestamp(timestamp)
             
             self.json_counter += 1
-            
+            print(f"[_handle_motion_json] json_str = {json_str} ")
             print(f"[MOTION] {'🔴 WYKRYTO' if motion else '✓ BRAK'} ruchu "
                   f"(timestamp: {timestamp})", flush=True)
             return motion
             
-        except json.JSONDecodeError as e:
-            print(f"[CAMMonitor] Błąd parsowania JSON: {e}", flush=True)
-        except Exception as e:
-            print(f"[CAMMonitor] Błąd obsługi motion JSON: {e}", flush=True)
+        except json.JSONDecodeError as jsonError:
+            print(f"[CAMMonitor] Błąd parsowania JSON: {jsonError}", flush=True)
+        except Exception as error:
+            print(f"[CAMMonitor] Błąd obsługi motion JSON: {error}", flush=True)
         
     def _handle_frame(self, frame_data):
         """Obsługa klatki JPEG"""
@@ -191,8 +191,8 @@ class CAMMonitor:
                 self.frame_counter += 1
                 
 
-        except Exception as e:
-            print(f"[CAMMonitor] Błąd dekodowania klatki: {e}", flush=True)
+        except Exception as error:
+            print(f"[CAMMonitor] Błąd dekodowania klatki: {error}", flush=True)
 
     def _ws_listener(self):
         print("[DEBUG] Wątek ws_listener wystartował!", flush=True)
@@ -246,7 +246,8 @@ class CAMMonitor:
                                 if self.no_frame_counter > 99 : self.no_frame_counter = 31
                     elif isinstance(msg, str):
                         # To jest JSON z informacją o ruchu
-                        if(self._handle_motion_json(msg)):
+                        self.motion_detected = self._handle_motion_json(msg)
+                        if(self.motion_detected):
                             self.motion_saftey = True
 
                     # if isinstance(msg, bytes):
