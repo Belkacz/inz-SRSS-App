@@ -34,8 +34,8 @@ class FrameAnalyser:
             model = tensorflow.saved_model.load(model_base_dir)
             self.detection_function = model.signatures['serving_default']
             print("[FrameAnalyser] ✓ Model TensorFlow SavedModel załadowany")
-        except Exception as e:
-            print(f"[FrameAnalyser] ✗ Błąd ładowania SavedModel: {e}")
+        except Exception as error:
+            print(f"[FrameAnalyser] ✗ Błąd ładowania SavedModel: {error}")
             raise
 
     def FindPeople(self, frame) -> Tuple[int, List[Box]]:
@@ -295,14 +295,6 @@ class CAMMonitor:
                 self.stremed_frame = self.placeholder_frame.copy()
                 time.sleep(5)
 
-    def setSteamFramerate(self, fps: int):
-        if fps < 60 and fps > 1:
-            self.stream_delay = 1 / fps
-            return True
-        else:
-            self.stream_delay = 0.033
-            return False
-
     def generateFrames(self):
         """Generator dla Flask MJPEG stream"""
         while True:
@@ -311,7 +303,7 @@ class CAMMonitor:
                 continue
 
             ret, buffer = cv2.imencode('.jpg', self.stremed_frame, 
-                                     [cv2.IMWRITE_JPEG_QUALITY, 80])
+                                     [cv2.IMWRITE_JPEG_QUALITY, 70])
             if not ret:
                 time.sleep(0.1)
                 continue

@@ -4,36 +4,16 @@ import camModule
 from safetyMonitor import STATUS
 
 def register_routes(app, pir_monitor, safety_monitor, cam_monitor, card_monitor):
-    @app.route('/pir', methods=['GET'])
-    def get_pir_data():
-        data_copy = pir_monitor.get_data()
-        print(f"[DEBUG routes.py] last_pir_data = {data_copy}")
-        return jsonify(data_copy)
-
-    # @app.route('/alarm', methods=['GET'])
-    # def get_alarm_status():
-    #     alarm_status = alarm_manager.PirAlarm
-    #     return jsonify({
-    #         'alarm': alarm_status,
-    #         'message': 'Brak aktywności!' if alarm_status else 'System aktywny'
-    #     })
-    # @app.route("/api/set_fps", methods=["GET", "PATCH"])
-    # def setFPS():
-    #     if request.method == "PATCH":
-    #         data = request.get_json(force=True)
-    #         if data.get("FPS"):
-    #             cam_monitor.setSteamFPS(data.FPS)
+    # enpoint zwcający dane z głównego systemu alertowego
     @app.route("/api/general_status", methods=["GET", "PATCH"])
     def get_general_alert():
+        # patch dla resetu systemu
         if request.method == "PATCH":
             data = request.get_json(force=True)
 
             if data.get("generalReset"):
 
                 safety_monitor.resetData()
-                # safety_monitor.reset_alert_timer() 
-                print("[API] Reset alarmu — ustawiono danger = False")
-
                 return jsonify(
                     {
                     "status": "reset_ok",
@@ -54,6 +34,7 @@ def register_routes(app, pir_monitor, safety_monitor, cam_monitor, card_monitor)
         }
         return jsonify(status)
     
+    # enpoint zwracjący dane z czujników i kamer
     @app.route("/api/sensors_status")
     def get_sensor_status():
         sensors_data = safety_monitor.getSensorData()
@@ -73,11 +54,13 @@ def register_routes(app, pir_monitor, safety_monitor, cam_monitor, card_monitor)
         }
         return jsonify(status)
     
+    # zwrot html z klatkami
     @app.route('/video_feed')
     def video_feed():
         return Response(cam_monitor.generateFrames(),
                         mimetype='multipart/x-mixed-replace; boundary=frame')
     
+    # dane z systemu card i zalogowanych użytkowników
     @app.route('/users')
     def get_users():
         users_in_json = []
@@ -104,10 +87,12 @@ def register_routes(app, pir_monitor, safety_monitor, cam_monitor, card_monitor)
             )
             
         return jsonify({
-        "users_in": users_in_json,
-        "users_out": users_out_json
+        "usersIn": users_in_json,
+        "usersOut": users_out_json,
+        "usersConnected": card_monitor.connected
     })
 
+    # wystawienie template
     @app.route('/')
     def home():
         return render_template("index.html")

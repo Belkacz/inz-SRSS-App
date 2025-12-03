@@ -124,8 +124,12 @@
       background-color: #3d1f1f !important;
     }
 
-        .interval-control {
+    .interval-control {
       padding-top: 1em;
+    }
+
+    .counter, #pir-alarm, #cam-alarm, .disconnected-message, .cam-data-box div {
+      line-height: 1.6em;
     }
 
     @media (max-width: 1000px) {
@@ -227,6 +231,7 @@
 
   <script>
 
+    // ustawienie koloru tła w zależnościu od stanu
     function setGeneralAlertClass(mode) {
       const box = document.getElementById("general-alerts");
 
@@ -237,6 +242,7 @@
       if (mode === "danger") box.classList.add("card-danger");
     }
     
+    // startowe wartości interwałów i zmiennych
     const BASE_REFRESH_INTERVAL = 60;
     let generalRefreshTime = BASE_REFRESH_INTERVAL;
     let sensorRefreshTime = 30;
@@ -249,6 +255,7 @@
     let prevStatus = null;
     let status = 0;
 
+    // format czasu na min i sec
     function formatTime(seconds) {
       if (seconds < 60) return `${seconds}s`;
       const minutes = Math.floor(seconds / 60);
@@ -256,6 +263,7 @@
       return secs > 0 ? `${minutes}m ${secs}s` : `${minutes}m`;
     }
 
+    // zwiększenie interwału na pobieraniu sensorów
     function increaseInterval() {
       if (sensorsInterval < MAX_INTERVAL) {
         sensorsInterval += INTERVAL_STEP;
@@ -264,6 +272,7 @@
       }
     }
 
+    // wyzmniejszenie interwału na pobieraniu sensorów
     function decreaseInterval() {
       if (sensorsInterval > MIN_INTERVAL) {
         sensorsInterval -= INTERVAL_STEP;
@@ -272,11 +281,13 @@
       }
     }
 
+    // wymuszenie pobrania sensorów natychmiast
     function handleFetchSensorNow() {
       fetchSensorsData();
       sensorRefreshTime = sensorsInterval;
     }
 
+    // funkcja fetch do pobrania danych z sensorów
     async function fetchSensorsData() {
       try {
         console.log("[DEBUG] Fetching /api/sensors_status");
@@ -289,7 +300,7 @@
         if (pirConnected) {
         // PIR połączony
           pirBox.innerHTML = `
-            <div class="counter">PIR26: <span id="pir26">${data.pirData?.pir26 ?? 0}</span></div>
+            <div class="counter">PIR26: <span id="pir26">${data.pirData?.pir26}</span></div>
             <div class="counter">PIR16: <span id="pir16">${data.pirData?.pir16 ?? 0}</span></div>
             <div id="pir-alarm" class="${data.pirData?.alarmStatus ? 'alarm-on' : 'alarm-off'}">
               ${data.pirData?.alarmStatus ? '🔴 Brak Ruchu' : '🟢 OK'}
@@ -310,8 +321,8 @@
               // Kamera połączona - pokaż normalne dane
               camBox.innerHTML = `
                 <h2>Stan kamery</h2>
-                <div>Ruch wykryty: <span id="cam-motion">${data.camData?.motionDetected ? 'Tak' : 'Nie'}</span></div>
-                <div>Liczba osób: <span id="cam-people">${data.camData?.peopleCount ?? 0}</span></div>
+                <div class="counter">Ruch wykryty: <span id="cam-motion">${data.camData?.motionDetected ? 'Tak' : 'Nie'}</span></div>
+                <div class="counter">Liczba osób: <span id="cam-people">${data.camData?.peopleCount ?? 0}</span></div>
                 <div id="cam-alarm" class="${!data.camData?.motionDetected ? 'alarm-on' : 'alarm-off'}" style="margin-top: 0.5em;">
                   ${!data.camData?.motionDetected ? '🔴 Brak Ruchu' : '🟢 OK'}
                 </div>
@@ -333,11 +344,12 @@
           sensorTimestamp.textContent = `Brak danych`;
         }
 
-      } catch (err) {
-        console.error("Błąd pobierania statusu sensorów:", err);
+      } catch (error) {
+        console.error("Błąd pobierania statusu sensorów:", error);
       }
     }
 
+    // licznik do pobrania danych sensorów
     function sensorsCountdown() {
       document.getElementById("sensor-refresh").textContent = `${sensorRefreshTime}s`;
       sensorRefreshTime--;
@@ -347,6 +359,7 @@
       }
     }
 
+    // usunięcie licznika do alarmu
     function stopWarningCountdown() {
       const el = document.getElementById("warning-countdown");
       if (warningCountdown !== null) {
@@ -356,6 +369,7 @@
       el.textContent = "";
     }
 
+    // licznik ostżeżenia zagrozenia
     function startWarningCountdown(countdown) {
       stopWarningCountdown();
       warningTimer = countdown;
@@ -372,13 +386,11 @@
       }, 1000);
     }
 
+    // funkcja fetch do pobrania stanu zagrożenia
     async function fetchGeneralStatus() {
       try {
-        console.log("[DEBUG] Fetching /api/general_status");
         const res = await fetch("/api/general_status");
         const data = await res.json();
-        console.log("[DEBUG] General status:", data);
-
         const newStatus = data.monitorStatus;
 
         if (prevStatus === null || prevStatus != newStatus) {
@@ -409,11 +421,12 @@
         status = newStatus;
 
         generalRefreshTime = data.nextRefreshIn || BASE_REFRESH_INTERVAL;
-      } catch (err) {
-        console.error("Błąd pobierania głównego statusu:", err);
+      } catch (error) {
+        console.error("Błąd pobierania głównego statusu:", error);
       }
     }
 
+    // licznik generalnego odświeżania
     function generalCountdown() {
       if (generalRefreshTime === -1) {
         return;
@@ -424,13 +437,11 @@
       }
     }
 
+    // funkcja fetch do pobierania urzytkowników
     async function fetchUsers() {
       try {
-        console.log("[DEBUG] Fetching /users");
         const res = await fetch("/users");
         const data = await res.json();
-        console.log("[DEBUG] Users data:", data);
-
         const usersInBody = document.querySelector("#users-in tbody");
         const usersOutBody = document.querySelector("#users-out tbody");
 
@@ -467,23 +478,26 @@
           tableBody.appendChild(detailsRow);
         }
 
-        data.users_in.forEach(u => createUserRow(u, usersInBody));
-        data.users_out.forEach(u => createUserRow(u, usersOutBody));
+        data.usersIn.forEach(u => createUserRow(u, usersInBody));
+        data.usersOut.forEach(u => createUserRow(u, usersOutBody));
 
-      } catch (err) {
-        console.error("Błąd pobierania użytkowników:", err);
+      } catch (error) {
+        console.error("Błąd pobierania użytkowników:", error);
       }
     }
 
+    // pokazywanie streama
     function startStream() {
       document.getElementById('video-container').innerHTML =
         '<img src="/video_feed" style="width:100%;border-radius:10px;">';
     }
 
+    // chowanie streama
     function stopStream() {
       document.getElementById('video-container').innerHTML = '';
     }
 
+    // funkcja fetch do restu alrmów
     async function resetAlarm() {
       try {
         console.log("[DEBUG] Resetting alarm via PATCH");
@@ -508,15 +522,14 @@
         
         fetchSensorsData();
         fetchGeneralStatus();
-      } catch (err) {
-        console.error("Błąd połączenia przy resecie:", err);
+      } catch (error) {
+        console.error("Błąd połączenia przy resecie:", error);
       }
     }
     
     document.getElementById("reset-btn").addEventListener("click", resetAlarm);
 
     // Pierwsze pobranie danych
-    console.log("[DEBUG] Initial data fetch");
     fetchUsers();
     fetchSensorsData();
     fetchGeneralStatus();
@@ -524,8 +537,6 @@
     // Uruchom countdowny
     setInterval(generalCountdown, 1000);
     setInterval(sensorsCountdown, 1000);
-    
-    console.log("[DEBUG] Timers started");
   </script>
 </body>
 </html>
