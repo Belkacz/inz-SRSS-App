@@ -69,53 +69,69 @@ class CardMonitor:
         self.user_handler = user_handler
         self.human_in = False
         
-        # Inicjalizuj jako puste listy
         self.users_in = []
         self.users_out = []
         
         self.thread = threading.Thread(target=self._ws_listener, daemon=True)
-
+        self.connection_attempts = 0  # NOWE
+        
     def startThread(self):
         self.thread.start()
 
     def _ws_listener(self):
-        print("[DEBUG] Wątek ws_listener wystartował!", flush=True)
+        print("[CardMonitor] Wątek ws_listener wystartował!", flush=True)
         while self.active:
             try:
+                # NOWE: Dodaj timeout i retry logic
+                self.connection_attempts += 1
+                print(f"[CardMonitor] Próba połączenia #{self.connection_attempts}...", flush=True)
+                
                 ws = websocket.WebSocket()
-                ws.connect(self.ws_url)
-                print(f"[CardMonitor] Połączono z {self.ws_url}")
+                ws.settimeout(5.0)  # NOWE: timeout na operacje
+                ws.connect(self.ws_url, timeout=10)
+                
+                print(f"[CardMonitor] ✓ Połączono z {self.ws_url}")
                 self.connected = True
-                while self.connected:
-                    msg = ws.recv()
-                    if not msg:
-                        continue
-                    if msg:
-                        try:
-                            data = json.loads(msg)
-                            self.card_list = []
-                            for key, value in data.items():
-                                if re.match(r"card\d+", key) and key != "cardCounter":
-                                    self.card_list.append(value)
+                self.connection_attempts = 0  # Reset po sukcesie
+                
+                while self.connected and self.active:
+                    try:
+                        msg = ws.recv()  # To teraz ma timeout
+                        if not msg:
+                            continue
                             
-                            if len(self.card_list) > 0:
-                                self.human_in = True
-                            else:
-                                self.human_in = False
+                        data = json.loads(msg)
+                        self.card_list = []
+                        
+                        for key, value in data.items():
+                            if re.match(r"card\d+", key) and key != "cardCounter":
+                                self.card_list.append(value)
+                        
+                        self.human_in = len(self.card_list) > 0
 
-                            try:
-                                db_users = self.user_handler.get_users()
-                                self.users_in, self.users_out = self.user_handler.create_list_in_n_out(
-                                    self.card_list, db_users
-                                )
-                            except Exception as db_error:
-                                import traceback
-                                traceback.print_exc()
-                        except json.JSONDecodeError as error:
-                            print(f"[CardMonitor][BŁĄD] {error}", flush=True)
+                        try:
+                            db_users = self.user_handler.get_users()
+                            self.users_in, self.users_out = self.user_handler.create_list_in_n_out(
+                                self.card_list, db_users
+                            )
+                        except Exception as db_error:
+                            print(f"[CardMonitor][DB ERROR] {db_error}", flush=True)
+                            
+                    except websocket.WebSocketTimeoutException:
+                        # Timeout na recv() - to normalne
+                        continue
+                    except json.JSONDecodeError as error:
+                        print(f"[CardMonitor][JSON ERROR] {error}", flush=True)
+                    
             except Exception as exception:
                 self.users_in, self.users_out = self.user_handler.create_list_in_n_out(
-                                    self.card_list, [])
-                print(f"[CardMonitor] [BŁĄD] {exception}, ponawiam połączenie za 5s...", flush=True)
+                    self.card_list, []
+                )
+                print(f"[CardMonitor] [ERROR] {exception}", flush=True)
                 self.connected = False
-                time.sleep(5)
+                
+                # Exponential backoff dla reconnect
+                wait_time = min(5 * self.connection_attempts, 30)
+                print(f"[CardMonitor] Czekam {wait_time}s przed ponowną próbą...", flush=True)
+                time.sleep(wait_time)
+
