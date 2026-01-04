@@ -205,88 +205,54 @@ class CAMMonitor:
                 print(f"[CAMMonitor] ✓ Połączono z {self.ws_url}", flush=True)
                 
                 while self.active:
-                    msg = ws.recv()
-                    if not msg:
-                        continue
-                    if isinstance(msg, bytes):
-                        nparr = np.frombuffer(msg, np.uint8)
-                        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-                        print("[CAMMonitor] isinstance(msg, bytes)", flush=True)
-                        if frame is not None:
-                            self.no_frame_counter = 0
-                            self.frame_counter += 1
-                            if self.frame_counter >= 60:
-                                self.frame_counter = 0
-                            
-                            # if self.detect_motion and self.prev_frame is not None:
-                            #     self.motion_detected = self.motion_detector.detectMotion(
-                            #         frame, self.prev_frame)
-                            #     if self.motion_detected:
-                            #         self.motion_saftey = True
-                            # self.prev_frame = frame
+                    try:
+                        msg = ws.recv()
+                        if not msg:
+                            time.sleep(0.1)
+                            continue
+                        if isinstance(msg, bytes):
+                            nparr = np.frombuffer(msg, np.uint8)
+                            frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                            if frame is not None:
+                                self.no_frame_counter = 0
+                                self.frame_counter += 1
+                                if self.frame_counter >= 60:
+                                    self.frame_counter = 0
+                                
+                                # if self.detect_motion and self.prev_frame is not None:
+                                #     self.motion_detected = self.motion_detector.detectMotion(
+                                #         frame, self.prev_frame)
+                                #     if self.motion_detected:
+                                #         self.motion_saftey = True
+                                # self.prev_frame = frame
 
-                            # Sprawdź czy ktoś jest
-                            if not self.card_monitor.human_in:
-                                self.people_count = 0
-                                self.detection_boxes = []
-                                self.stremed_frame = self.frame_analyser.DrawBox(frame, [], 0)
-                                continue
+                                # Sprawdź czy ktoś jest
+                                if not self.card_monitor.human_in:
+                                    self.people_count = 0
+                                    self.detection_boxes = []
+                                    self.stremed_frame = self.frame_analyser.DrawBox(frame, [], 0)
+                                    continue
 
-                            if self.find_people and self.frame_counter % self.analyze_interval == 0:
-                                self.people_count, self.detection_boxes = self.frame_analyser.FindPeople(frame)
+                                if self.find_people and self.frame_counter % self.analyze_interval == 0:
+                                    self.people_count, self.detection_boxes = self.frame_analyser.FindPeople(frame)
 
-                            self.stremed_frame = self.frame_analyser.DrawBox(
-                                frame, self.detection_boxes, self.people_count
-                            )
-                        else:
-                            self.no_frame_counter += 1
-                            print("[CAMMonitor] Błąd dekodowania klatki", flush=True)
-                            if self.no_frame_counter > 30:
-                                self.stremed_frame = self.placeholder_frame.copy()
-                                if self.no_frame_counter > 99 : self.no_frame_counter = 31
-                    elif isinstance(msg, str):
-                        # To jest JSON z informacją o ruchu
-                        self.motion_detected = self._handle_motion_json(msg)
-                        if(self.motion_detected):
-                            self.motion_saftey = True
-
-                    # if isinstance(msg, bytes):
-                    #     nparr = np.frombuffer(msg, np.uint8)
-                    #     frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-                        
-                    #     if frame is not None:
-                    #         self.no_frame_counter = 0
-                    #         self.frame_counter += 1
-                    #         if self.frame_counter >= 60:
-                    #             self.frame_counter = 0
-                            
-                    #         if self.detect_motion and self.prev_frame is not None:
-                    #             self.motion_detected = self.motion_detector.detectMotion(
-                    #                 frame, self.prev_frame)
-                    #             if self.motion_detected:
-                    #                 self.motion_saftey = True
-                    #         self.prev_frame = frame
-
-                    #         # Sprawdź czy ktoś jest
-                    #         if not self.card_monitor.human_in:
-                    #             self.people_count = 0
-                    #             self.detection_boxes = []
-                    #             self.stremed_frame = self.frame_analyser.DrawBox(frame, [], 0)
-                    #             continue
-
-                    #         if self.find_people and self.frame_counter % self.analyze_interval == 0:
-                    #             self.people_count, self.detection_boxes = self.frame_analyser.FindPeople(frame)
-
-                    #         self.stremed_frame = self.frame_analyser.DrawBox(
-                    #             frame, self.detection_boxes, self.people_count
-                    #         )
-                    #     else:
-                    #         self.no_frame_counter += 1
-                    #         print("[CAMMonitor] Błąd dekodowania klatki", flush=True)
-                    #         if self.no_frame_counter > 30:
-                    #             self.stremed_frame = self.placeholder_frame.copy()
-                    #             if self.no_frame_counter > 99 : self.no_frame_counter = 31
-
+                                self.stremed_frame = self.frame_analyser.DrawBox(
+                                    frame, self.detection_boxes, self.people_count
+                                )
+                            else:
+                                self.no_frame_counter += 1
+                                print("[CAMMonitor] Błąd dekodowania klatki", flush=True)
+                                if self.no_frame_counter > 30:
+                                    self.stremed_frame = self.placeholder_frame.copy()
+                                    if self.no_frame_counter > 99 : self.no_frame_counter = 31
+                        elif isinstance(msg, str):
+                            # To jest JSON z informacją o ruchu
+                            self.motion_detected = self._handle_motion_json(msg)
+                            if(self.motion_detected):
+                                self.motion_saftey = True
+                    except websocket.WebSocketTimeoutException:
+                        time.sleep(0.1)
+                        continue  # Timeout jest OK
             except Exception as error:
                 self.cam_connected = False
                 print(f"[CAMMonitor] BŁĄD: {error}", flush=True)

@@ -132,6 +132,16 @@
       line-height: 1.6em;
     }
 
+    .disconnected-message {
+      text-align: center;
+      padding: 2em 1em;
+      color: #ff9800;
+      font-weight: bold;
+      background-color: #2a2a2a;
+      border-radius: 0.5em;
+      border: 2px dashed #ff9800;
+    }
+
     @media (max-width: 1000px) {
       .grid {
         grid-template-columns: 1fr;
@@ -155,46 +165,33 @@
       <!-- Lewa kolumna -->
       <div class="card">
         <h2>Lista użytkowników</h2>
-        <div>
-          <h3 class="in">Wewnątrz</h3>
-          <table id="users-in">
-            <thead>
-              <tr><th></th><th>Imię</th><th>Nazwisko</th><th>Karta</th></tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-
-          <h3 class="out" style="margin-top: 1.5em;">Poza</h3>
-          <table id="users-out">
-            <thead>
-              <tr><th></th><th>Imię</th><th>Nazwisko</th><th>Karta</th></tr>
-            </thead>
-            <tbody></tbody>
-          </table>
+        <!-- placeholder users -->
+        <div id="users-div">
+          <div class="disconnected-message">
+            CardService nie zainicjowany ...
+          </div>
         </div>
 
-        <button onclick="fetchUsers()">🔄 Odśwież listę</button>
+        <button onclick="fetchUsers()">🔄 Odśwież</button>
       </div>
 
       <!-- Środek -->
       <div class="card">
         <h2>PIR i Cam status</h2>
         <div style="margin-top: 1em;">
+          <!-- placeholder PIR -->
           <div class="pir-data-box">
-            <div class="counter">PIR26: <span id="pir26">--</span></div>
-            <div class="counter">PIR16: <span id="pir16">--</span></div>
-            <div id="pir-alarm" class="alarm-off">--</div>
+            <div class="disconnected-message">
+                PirService nie zainicjowany ...
+            </div>
           </div>
           <br>
+          <!--  placeholder CAM -->
           <div class="cam-data-box">
             <h2>Stan kamery</h2>
-            <div>
-              Ruch wykryty: <span id="cam-motion">--</span>
+            <div class="disconnected-message">
+              CamService nie zainicjowany ...
             </div>
-            <div>
-              Liczba osób: <span id="cam-people">--</span>
-            </div>
-            <div id="cam-alarm" style="margin-top: 0.5em;">--</div>
           </div>
           <br>
           <div class="timestamp" id="sensor-timestamp">Ostatnia aktualizacja sensorów: --</div>
@@ -295,10 +292,11 @@
         const data = await res.json();
         console.log("[DEBUG] Sensors data:", data);
 
-        pirConnected = data.pirData?.pirConnected
+        // PIR Servive
+        const pirConnected = data.pirData?.pirConnected;
         const pirBox = document.querySelector(".pir-data-box");
+        
         if (pirConnected) {
-        // PIR połączony
           pirBox.innerHTML = `
             <div class="counter">PIR26: <span id="pir26">${data.pirData?.pir26}</span></div>
             <div class="counter">PIR16: <span id="pir16">${data.pirData?.pir16 ?? 0}</span></div>
@@ -307,36 +305,37 @@
             </div>
           `;
         } else {
-          // PIR rozłączony - pokaż komunikat
           pirBox.innerHTML = `
             <div class="disconnected-message">
-              Brak Połączenia z serwisem Pir
+              ⚠️ Brak połączenia z PirService
             </div>
           `;
         }
 
+        // CAM Service
         const camConnected = data.camData?.camConnected;
         const camBox = document.querySelector(".cam-data-box");
+        
         if (camConnected) {
-              // Kamera połączona - pokaż normalne dane
-              camBox.innerHTML = `
-                <h2>Stan kamery</h2>
-                <div class="counter">Ruch wykryty: <span id="cam-motion">${data.camData?.motionDetected ? 'Tak' : 'Nie'}</span></div>
-                <div class="counter">Liczba osób: <span id="cam-people">${data.camData?.peopleCount ?? 0}</span></div>
-                <div id="cam-alarm" class="${!data.camData?.motionDetected ? 'alarm-on' : 'alarm-off'}" style="margin-top: 0.5em;">
-                  ${!data.camData?.motionDetected ? '🔴 Brak Ruchu' : '🟢 OK'}
-                </div>
-              `;
-            } else {
-              // Kamera rozłączona - pokaż komunikat
-              camBox.innerHTML = `
-                <h2>Stan kamery</h2>
-                <div class="disconnected-message">
-                  Brak Połączenia z serwisem Kamery
-                </div>
-              `;
-            }
-        sensorTimestamp = document.getElementById("sensor-timestamp")
+          camBox.innerHTML = `
+            <h2>Stan kamery</h2>
+            <div class="counter">Ruch wykryty: <span id="cam-motion">${data.camData?.motionDetected ? 'Tak' : 'Nie'}</span></div>
+            <div class="counter">Liczba osób: <span id="cam-people">${data.camData?.peopleCount ?? 0}</span></div>
+            <div id="cam-alarm" class="${!data.camData?.motionDetected ? 'alarm-on' : 'alarm-off'}" style="margin-top: 0.5em;">
+              ${!data.camData?.motionDetected ? '🔴 Brak Ruchu' : '🟢 OK'}
+            </div>
+          `;
+        } else {
+          camBox.innerHTML = `
+            <h2>Stan kamery</h2>
+            <div class="disconnected-message">
+              ⚠️ Brak połączenia z CamService
+            </div>
+          `;
+        }
+
+        // Czas aktualizacji
+        const sensorTimestamp = document.getElementById("sensor-timestamp");
         if (data.timestamp) {
           const date = new Date(data.timestamp * 1000);
           sensorTimestamp.textContent = `Ostatnia aktualizacja: ${date.toLocaleTimeString('pl-PL')}`;
@@ -442,11 +441,39 @@
       try {
         const res = await fetch("/users");
         const data = await res.json();
+        const usersDiv = document.getElementById("users-div");
+        
+        // Sprawdź czy CardService jest połączony
+        if (!data.cardConnected) {
+          usersDiv.innerHTML = `
+            <div class="disconnected-message">
+              ⚠️ Brak połączenia z CardService
+            </div>
+          `;
+          return;
+        }
+        
+        // Jeśli połączony - przywróć normalny widok
+        usersDiv.innerHTML = `
+          <h3 class="in">Wewnątrz</h3>
+          <table id="users-in">
+            <thead>
+              <tr><th></th><th>Imię</th><th>Nazwisko</th><th>Karta</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+
+          <h3 class="out" style="margin-top: 1.5em;">Poza</h3>
+          <table id="users-out">
+            <thead>
+              <tr><th></th><th>Imię</th><th>Nazwisko</th><th>Karta</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        `;
+        
         const usersInBody = document.querySelector("#users-in tbody");
         const usersOutBody = document.querySelector("#users-out tbody");
-
-        usersInBody.innerHTML = "";
-        usersOutBody.innerHTML = "";
 
         function createUserRow(u, tableBody) {
           const mainRow = document.createElement("tr");
@@ -483,6 +510,12 @@
 
       } catch (error) {
         console.error("Błąd pobierania użytkowników:", error);
+        const usersDiv = document.getElementById("users-div");
+        usersDiv.innerHTML = `
+          <div class="disconnected-message">
+            ❌ Błąd połączenia z serwerem
+          </div>
+        `;
       }
     }
 

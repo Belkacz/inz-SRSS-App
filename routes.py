@@ -89,7 +89,7 @@ def register_routes(app, pir_monitor, safety_monitor, cam_monitor, card_monitor)
         return jsonify({
         "usersIn": users_in_json,
         "usersOut": users_out_json,
-        "usersConnected": card_monitor.connected
+        "cardConnected": card_monitor.connected 
     })
 
     # wystawienie template
