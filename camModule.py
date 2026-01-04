@@ -1,3 +1,5 @@
+from datetime import datetime
+import json
 from typing import List, Tuple
 from dataclasses import dataclass
 import threading
@@ -139,9 +141,10 @@ class CAMMonitor:
         
         self.motion_detected = False
         self.motion_saftey = False
-        self.frames_with_movement = 0
+        self.last_motion_time = None
         self.people_count = 0
         self.frame_counter = 0
+        self.json_counter = 0
         self.no_frame_counter = 0
         self.detection_boxes = []
         
@@ -152,6 +155,44 @@ class CAMMonitor:
 
     def startThread(self):
         self.thread.start()
+        
+    def _handle_motion_json(self, json_str):
+        """Obsługa JSON z informacją o ruchu"""
+        try:
+            print(f"[_handle_motion_json] json_str= {json_str} ")
+            data = json.loads(json_str)
+            motion = data.get("motion", False)
+            timestamp = data.get("timestamp", 0)
+            
+            self.motion_detected = motion
+            if motion:
+                self.last_motion_time = datetime.fromtimestamp(timestamp)
+            
+            self.json_counter += 1
+            print(f"[_handle_motion_json] json_str = {json_str} ")
+            print(f"[MOTION] {'🔴 WYKRYTO' if motion else '✓ BRAK'} ruchu "
+                  f"(timestamp: {timestamp})", flush=True)
+            return motion
+            
+        except json.JSONDecodeError as jsonError:
+            print(f"[CAMMonitor] Błąd parsowania JSON: {jsonError}", flush=True)
+        except Exception as error:
+            print(f"[CAMMonitor] Błąd obsługi motion JSON: {error}", flush=True)
+        
+    def _handle_frame(self, frame_data):
+        """Obsługa klatki JPEG"""
+        try:
+            nparr = np.frombuffer(frame_data, np.uint8)
+            frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            
+            if frame is not None:
+                # with self.frame_lock:
+                self.last_frame = frame
+                self.frame_counter += 1
+                
+
+        except Exception as error:
+            print(f"[CAMMonitor] Błąd dekodowania klatki: {error}", flush=True)
 
     def _ws_listener(self):
         print("[DEBUG] Wątek ws_listener wystartował!", flush=True)
@@ -167,22 +208,22 @@ class CAMMonitor:
                     msg = ws.recv()
                     if not msg:
                         continue
-
                     if isinstance(msg, bytes):
                         nparr = np.frombuffer(msg, np.uint8)
                         frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-                        
+                        print("[CAMMonitor] isinstance(msg, bytes)", flush=True)
                         if frame is not None:
                             self.no_frame_counter = 0
                             self.frame_counter += 1
                             if self.frame_counter >= 60:
                                 self.frame_counter = 0
                             
-                            if self.detect_motion and self.prev_frame is not None:
-                                if(self.motion_detector.detectMotion(
-                                    frame, self.prev_frame)):
-                                    self.motion_saftey = True
-                            self.prev_frame = frame
+                            # if self.detect_motion and self.prev_frame is not None:
+                            #     self.motion_detected = self.motion_detector.detectMotion(
+                            #         frame, self.prev_frame)
+                            #     if self.motion_detected:
+                            #         self.motion_saftey = True
+                            # self.prev_frame = frame
 
                             # Sprawdź czy ktoś jest
                             if not self.card_monitor.human_in:
@@ -203,6 +244,48 @@ class CAMMonitor:
                             if self.no_frame_counter > 30:
                                 self.stremed_frame = self.placeholder_frame.copy()
                                 if self.no_frame_counter > 99 : self.no_frame_counter = 31
+                    elif isinstance(msg, str):
+                        # To jest JSON z informacją o ruchu
+                        self.motion_detected = self._handle_motion_json(msg)
+                        if(self.motion_detected):
+                            self.motion_saftey = True
+
+                    # if isinstance(msg, bytes):
+                    #     nparr = np.frombuffer(msg, np.uint8)
+                    #     frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                        
+                    #     if frame is not None:
+                    #         self.no_frame_counter = 0
+                    #         self.frame_counter += 1
+                    #         if self.frame_counter >= 60:
+                    #             self.frame_counter = 0
+                            
+                    #         if self.detect_motion and self.prev_frame is not None:
+                    #             self.motion_detected = self.motion_detector.detectMotion(
+                    #                 frame, self.prev_frame)
+                    #             if self.motion_detected:
+                    #                 self.motion_saftey = True
+                    #         self.prev_frame = frame
+
+                    #         # Sprawdź czy ktoś jest
+                    #         if not self.card_monitor.human_in:
+                    #             self.people_count = 0
+                    #             self.detection_boxes = []
+                    #             self.stremed_frame = self.frame_analyser.DrawBox(frame, [], 0)
+                    #             continue
+
+                    #         if self.find_people and self.frame_counter % self.analyze_interval == 0:
+                    #             self.people_count, self.detection_boxes = self.frame_analyser.FindPeople(frame)
+
+                    #         self.stremed_frame = self.frame_analyser.DrawBox(
+                    #             frame, self.detection_boxes, self.people_count
+                    #         )
+                    #     else:
+                    #         self.no_frame_counter += 1
+                    #         print("[CAMMonitor] Błąd dekodowania klatki", flush=True)
+                    #         if self.no_frame_counter > 30:
+                    #             self.stremed_frame = self.placeholder_frame.copy()
+                    #             if self.no_frame_counter > 99 : self.no_frame_counter = 31
 
             except Exception as error:
                 self.cam_connected = False
