@@ -375,7 +375,7 @@
       const el = document.getElementById("warning-countdown");
 
       warningCountdown = setInterval(() => {
-        el.textContent = `Rozpoczecie procedury Alarmowej za: ${warningTimer}s`;
+        el.textContent = `Rozpoczęcie procedury alarmowej za: ${formatTime(warningTimer)}`;
         warningTimer--;
 
         if (warningTimer <= 0) {

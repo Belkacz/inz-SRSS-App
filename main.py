@@ -17,7 +17,7 @@ def main():
     pir_monitor = PIRMonitor(settings.WS_SERVER_URL)
     user_handler = UserHandler(settings.DB_URL)
     card_monitor = CardMonitor(settings.WS_CARD_URL, user_handler)
-    cam_monitor = CAMMonitor(settings.WS_CAMERA_URL, card_monitor)
+    cam_monitor = CAMMonitor(settings.WS_CAMERA_URL)
     
     safety_monitor = SafetyMonitor(pir_monitor, cam_monitor, card_monitor, WARNING_INTERVAL, ALARM_REFRESH)
     register_routes(app, pir_monitor, safety_monitor, cam_monitor, card_monitor)

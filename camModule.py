@@ -8,136 +8,15 @@ import numpy as np
 import cv2
 import websocket
 from cardModule import CardMonitor
-import tensorflow
-
-@dataclass
-class Box:
-    x1: int
-    y1: int
-    x2: int
-    y2: int
-    conf: float
-
-PERSON_COLORS = [
-    (0, 255, 0),   # zielony – osoba 1
-    (0, 0, 255),   # czerwony – osoba 2
-    (255, 0, 0)    # niebieski – osoba 3
-]
-
-class FrameAnalyser:
-    def __init__(self):
-        self.max_people = 3
-        self.confidence_threshold = 0.5
-        model_base_dir = "tensorflow/ssd_mobilenet_v1_coco_2018_01_28/saved_model"
-
-        try:
-            model = tensorflow.saved_model.load(model_base_dir)
-            self.detection_function = model.signatures['serving_default']
-            print("[FrameAnalyser] ✓ Model TensorFlow SavedModel załadowany")
-        except Exception as error:
-            print(f"[FrameAnalyser] ✗ Błąd ładowania SavedModel: {error}")
-            raise
-
-    def FindPeople(self, frame) -> Tuple[int, List[Box]]:
-        h, w = frame.shape[:2]
-        input_tensor = tensorflow.convert_to_tensor(frame)
-        input_tensor = input_tensor[tensorflow.newaxis, ...]  # dodaj wymiar batch
-
-        detections = self.detection_function(input_tensor)
-
-        # Wyciągnij wyniki
-        boxes = detections['detection_boxes'][0].numpy()
-        scores = detections['detection_scores'][0].numpy()
-        classes = detections['detection_classes'][0].numpy()
-
-        results = []
-        for box, score, class_id in zip(boxes, scores, classes):
-            if score < self.confidence_threshold:
-                continue
-            if int(class_id) != 1:  # COCO class 1 = person
-                continue
-            ymin, xmin, ymax, xmax = box
-            x1 = int(xmin * w)
-            y1 = int(ymin * h)
-            x2 = int(xmax * w)
-            y2 = int(ymax * h)
-            results.append(Box(x1, y1, x2, y2, score))
-
-        # Tylko max_people najlepsze
-        results = sorted(results, key=lambda b: b.conf, reverse=True)[:self.max_people]
-        return len(results), results
-
-    def DrawBox(self, frame, boxes: List[Box], people_count):
-        line_people_size = 2
-        line_conf_size = 1
-        drawed_frame = frame.copy()
-        
-        if people_count > 0:
-            for idx, box in enumerate(boxes):
-                # dobór koloru prostokąta
-                color = PERSON_COLORS[idx] if idx < len(PERSON_COLORS) else (0, 255, 0)
-                
-                # Rysowanie prostąkąta
-                cv2.rectangle(drawed_frame, (box.x1, box.y1), (box.x2, box.y2), color, 2)
-                
-                # Dodaje tekst
-                label = f"Person {idx+1}: {box.conf:.2f}"
-                cv2.putText(drawed_frame, label, (box.x1, box.y1 - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, line_conf_size)
-
-        # Licznik osób
-        cv2.putText(drawed_frame, f"Ludzi: {people_count}",
-                (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), line_people_size)
-        
-        return drawed_frame
-
-
-class MotionDetector:
-    def __init__(self, threshold=25, min_area=200):
-        self.threshold = 20
-        self.min_area = min_area
-        self.gaus_blur = 21
-
-    def detectMotion(self, frame, prev_frame) -> bool:
-        if frame.shape != prev_frame.shape:
-            prev_frame = cv2.resize(prev_frame, (frame.shape[1], frame.shape[0]))
-
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        gray = cv2.GaussianBlur(gray, (self.gaus_blur, self.gaus_blur), 0)
-
-        prev_gray = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
-        prev_gray = cv2.GaussianBlur(prev_gray, (self.gaus_blur, self.gaus_blur), 0)
-
-        frame_delta = cv2.absdiff(prev_gray, gray)
-        _, thresh = cv2.threshold(frame_delta, self.threshold, 255, cv2.THRESH_BINARY)
-        thresh = cv2.dilate(thresh, None, iterations=2)
-        cv2.imwrite("thresh.jpg", thresh)
-        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        motion_detected = False
-        for contour in contours:
-            # print(f"[MotionDetector] cv2.contourArea(contour) = {cv2.contourArea(contour)}")
-            if cv2.contourArea(contour) > self.min_area:
-                motion_detected = True
-                break
-        return motion_detected
-
 
 class CAMMonitor:
-    def __init__(self, ws_url: str, card_monitor: CardMonitor, 
-                 detect_motion=True, find_people=True) -> None:
+    def __init__(self, ws_url: str) -> None:
         self.ws_url = ws_url
         self.cam_connected = False
-        self.card_monitor = card_monitor
         self.thread = threading.Thread(target=self._ws_listener, daemon=True)
         self.active = True
-        self.prev_frame = None
-        self.last_frame = None
         self.stremed_frame = None
         self.placeholder_frame = cv2.imread("stand_by.jpg")
-        self.find_people = find_people
-        self.detect_motion = detect_motion
-        self.frame_analyser = FrameAnalyser()
-        self.motion_detector = MotionDetector()
         
         self.motion_detected = False
         self.motion_saftey = False
@@ -147,19 +26,13 @@ class CAMMonitor:
         self.json_counter = 0
         self.no_frame_counter = 0
         self.detection_boxes = []
-        
-        self.analyze_interval = 10  # Co ile klatek analizować
         self.stream_delay = 1/15  # FPS streamu
-        
-        print(f"[CAMMonitor] Inicjalizacja: analyze_interval={self.analyze_interval}", flush=True)
 
     def startThread(self):
         self.thread.start()
         
     def _handle_motion_json(self, json_str):
-        """Obsługa JSON z informacją o ruchu"""
         try:
-            print(f"[_handle_motion_json] json_str= {json_str} ")
             data = json.loads(json_str)
             motion = data.get("motion", False)
             timestamp = data.get("timestamp", 0)
@@ -169,28 +42,21 @@ class CAMMonitor:
                 self.last_motion_time = datetime.fromtimestamp(timestamp)
             
             self.json_counter += 1
-            print(f"[_handle_motion_json] json_str = {json_str} ")
-            print(f"[MOTION] {'🔴 WYKRYTO' if motion else '✓ BRAK'} ruchu "
-                  f"(timestamp: {timestamp})", flush=True)
             return motion
             
         except json.JSONDecodeError as jsonError:
             print(f"[CAMMonitor] Błąd parsowania JSON: {jsonError}", flush=True)
         except Exception as error:
             print(f"[CAMMonitor] Błąd obsługi motion JSON: {error}", flush=True)
-        
+    # Obsługa klatki JPEG
     def _handle_frame(self, frame_data):
-        """Obsługa klatki JPEG"""
         try:
             nparr = np.frombuffer(frame_data, np.uint8)
             frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             
             if frame is not None:
-                # with self.frame_lock:
                 self.last_frame = frame
                 self.frame_counter += 1
-                
-
         except Exception as error:
             print(f"[CAMMonitor] Błąd dekodowania klatki: {error}", flush=True)
 
@@ -218,27 +84,8 @@ class CAMMonitor:
                                 self.frame_counter += 1
                                 if self.frame_counter >= 60:
                                     self.frame_counter = 0
-                                
-                                # if self.detect_motion and self.prev_frame is not None:
-                                #     self.motion_detected = self.motion_detector.detectMotion(
-                                #         frame, self.prev_frame)
-                                #     if self.motion_detected:
-                                #         self.motion_saftey = True
-                                # self.prev_frame = frame
 
-                                # Sprawdź czy ktoś jest
-                                if not self.card_monitor.human_in:
-                                    self.people_count = 0
-                                    self.detection_boxes = []
-                                    self.stremed_frame = self.frame_analyser.DrawBox(frame, [], 0)
-                                    continue
-
-                                if self.find_people and self.frame_counter % self.analyze_interval == 0:
-                                    self.people_count, self.detection_boxes = self.frame_analyser.FindPeople(frame)
-
-                                self.stremed_frame = self.frame_analyser.DrawBox(
-                                    frame, self.detection_boxes, self.people_count
-                                )
+                                self.stremed_frame = frame
                             else:
                                 self.no_frame_counter += 1
                                 print("[CAMMonitor] Błąd dekodowania klatki", flush=True)
@@ -260,9 +107,8 @@ class CAMMonitor:
                 traceback.print_exc()
                 self.stremed_frame = self.placeholder_frame.copy()
                 time.sleep(5)
-
+# Generator dla Flask MJPEG stream
     def generateFrames(self):
-        """Generator dla Flask MJPEG stream"""
         while True:
             if self.stremed_frame is None:
                 time.sleep(0.1)
