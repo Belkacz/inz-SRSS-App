@@ -8,7 +8,7 @@ from safetyMonitor import SafetyMonitor, STATUS
 def safety():
     pir = Mock()
     pir.getPirCounter.side_effect = lambda x: 0
-    pir.restCounters = Mock()
+    pir.resetCounters = Mock()
 
     cam = Mock()
     cam.motion_saftey = False

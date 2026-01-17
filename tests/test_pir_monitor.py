@@ -21,7 +21,7 @@ def test_reset_counters(pir_monitor):
     pir_monitor.pir26Counter = 5
     pir_monitor.pir16Counter = 3
 
-    pir_monitor.restCounters()
+    pir_monitor.resetCounters()
 
     assert pir_monitor.pir26Counter == 0
     assert pir_monitor.pir16Counter == 0

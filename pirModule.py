@@ -27,7 +27,7 @@ class PIRMonitor:
                 return 0
 
     # metoda do restowania wartości pir
-    def restCounters(self):
+    def resetCounters(self):
         self.pir26Counter = 0
         self.pir16Counter = 0
 
