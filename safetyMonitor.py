@@ -172,7 +172,7 @@ class SafetyMonitor:
             self.ui_cam_motion = True  # Raz True = zostaje True do resetu
             self.total_cam_motion = True
 
-        self.pir_monitor.restCounters()
+        self.pir_monitor.resetCounters()
         self.cam_monitor.motion_saftey = False
 
     def getSensorData(self):
