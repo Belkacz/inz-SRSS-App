@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>SRSS Monitor</title>
+  <script src="https://unpkg.com/feather-icons"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -22,10 +23,35 @@
 
     .grid {
       display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
+      grid-template-columns: 2fr 1fr;
       gap: 1em;
       width: 95%;
-      max-width: 1400px;
+      max-width:1400px;
+    }
+
+    .combined-card {
+      display: flex;
+      flex-direction: column;
+      gap: 1em;
+    }
+
+    .combined-inner {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1em;
+    }
+
+    .section-card {
+      background: #2a2a2a;
+      padding: 1em;
+      border-radius: 0.8em;
+    }
+
+    .control-section {
+      background: #2a2a2a;
+      padding: 1em;
+      border-radius: 0.8em;
+      margin-top: auto;
     }
 
     .card {
@@ -35,8 +61,15 @@
       box-shadow: 0 0 10px rgba(0,0,0,0.4);
     }
 
-    .alarm-on { color: #f55; font-weight: bold; }
-    .alarm-off { color: #5f5; font-weight: bold; }
+    .alarm-on { 
+      color: #f55; 
+      font-weight: bold; 
+    }
+
+    .alarm-off { 
+      color: #5f5; 
+      font-weight: bold; 
+    }
 
     table {
       width: 100%;
@@ -58,13 +91,6 @@
     .in { color: #5f5; }
     .out { color: #f55; }
 
-    #video-container img {
-      width: 100%;
-      border-radius: 10px;
-      max-height: 500px;
-      object-fit: cover;
-    }
-
     button {
       background: #333;
       color: #eee;
@@ -73,6 +99,9 @@
       border-radius: 0.5em;
       margin: 0.3em;
       cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5em;
     }
 
     button:hover {
@@ -111,7 +140,7 @@
       align-items: center;
       gap: 0.5em;
     }
-    
+
     .card-safe {
       background: #1e1e1e !important;
     }
@@ -128,8 +157,13 @@
       padding-top: 1em;
     }
 
-    .counter, #pir-alarm, #cam-alarm, .disconnected-message, .cam-data-box div {
+    .counter, 
+    #pir-alarm, 
+    #cam-alarm, 
+    .disconnected-message, 
+    .cam-data-box div {
       line-height: 1.6em;
+      display: flex;
     }
 
     .disconnected-message {
@@ -142,14 +176,109 @@
       border: 2px dashed #ff9800;
     }
 
-    @media (max-width: 1000px) {
+    /* Camera card styling */
+    .camera-wrapper {
+      position: relative;
+    }
+
+    #video-container {
+      position: relative;
+      margin-top: 1em;
+      margin-bottom: 1em;
+    }
+
+    #video-container img {
+      width: 100%;
+      border-radius: 10px;
+      max-height: 500px;
+      object-fit: cover;
+      display: block;
+    }
+
+    .camera-resize-btn {
+      position: absolute;
+      top: 0px;
+      right: 0px;
+      background: rgba(0,0,0,0.7);
+      border: 2px solid rgba(255,255,255,0.3);
+      color: #fff;
+      font-size: 20px;
+      padding: 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      z-index: 10;
+      transition: all 0.2s;
+      display: none;
+      width: 40px;
+      height: 40px;
+      justify-content: center;
+      align-items: center;
+    }
+
+    #video-container img ~ .camera-resize-btn {
+      display: flex;
+    }
+
+    .camera-resize-btn:hover {
+      background: rgba(255,255,255,0.2);
+      border-color: rgba(255,255,255,0.5);
+    }
+
+    /* Expanded camera overlay */
+    .camera-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 9999;
+      padding: 2em;
+    }
+
+    .camera-overlay.active {
+      display: block;
+    }
+
+    .camera-overlay-content {
+      position: absolute;
+      transition: all 0.3s ease;
+    }
+
+    .camera-overlay-content img {
+      width: 640px;
+      height: 480px;
+      border-radius: 10px;
+      box-shadow: 0 0 50px rgba(0,0,0,0.8);
+      object-fit: cover;
+    }
+
+    .camera-overlay .camera-resize-btn {
+      display: flex;
+    }
+
+    @media (max-width: 1200px) {
       .grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .combined-inner {
         grid-template-columns: 1fr;
       }
     }
   </style>
 </head>
 <body>
+  <!-- Overlay for expanded camera -->
+  <div class="camera-overlay" id="camera-overlay" onclick="shrinkCamera(event)">
+    <div class="camera-overlay-content" id="overlay-content">
+      <img id="overlay-video" src="" alt="Podgląd kamery">
+      <button class="camera-resize-btn" onclick="shrinkCamera(event)">
+        <i data-feather="minimize-2"></i>
+      </button>
+    </div>
+  </div>
+
   <h1>SRSS Monitoring</h1>
 
   <div>
@@ -157,89 +286,162 @@
       <h2>Alert Generalny</h2>
       <div>Status: <span id="general-status">--</span></div>
       <div id="warning-countdown" style="margin-top:0.5em; font-size:1.2em; color:#ffcc00;"></div>
-      <button id="reset-btn">⏯️ Reset</button>
+      <button id="reset-btn">
+        <i data-feather="rotate-ccw"></i>
+        Reset
+      </button>
     </div>
     <div>
       <h2>Status subsystemów</h2>
       <div class="grid">
-      <!-- Lewa kolumna -->
-      <div class="card">
-        <h2>Lista użytkowników</h2>
-        <!-- placeholder users -->
-        <div id="users-div">
-          <div class="disconnected-message">
-            CardService nie zainicjowany ...
+      <!-- Połączona lewa i środkowa kolumna -->
+      <div class="card combined-card">
+        <div class="combined-inner">
+          <!-- Sekcja użytkowników -->
+          <div class="section-card">
+            <h2>Lista użytkowników</h2>
+            <div id="users-div">
+              <div class="disconnected-message">
+                <i data-feather="loader"></i> CardService nie zainicjowany ...
+              </div>
+            </div>
+          </div>
+
+          <!-- Sekcja PIR i Cam -->
+          <div class="section-card">
+            <h2>PIR i Cam status</h2>
+            <div style="margin-top: 1em;">
+              <div class="pir-data-box">
+                <div class="disconnected-message">
+                  <i data-feather="loader"></i> PirService nie zainicjowany ...
+                </div>
+              </div>
+              <br>
+              <div class="cam-data-box">
+                <h2>Stan kamery</h2>
+                <div class="disconnected-message">
+                  <i data-feather="loader"></i> CamService nie zainicjowany ...
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        <button onclick="fetchUsers()">🔄 Odśwież</button>
-      </div>
-
-      <!-- Środek -->
-      <div class="card">
-        <h2>PIR i Cam status</h2>
-        <div style="margin-top: 1em;">
-          <!-- placeholder PIR -->
-          <div class="pir-data-box">
-            <div class="disconnected-message">
-                PirService nie zainicjowany ...
-            </div>
-          </div>
-          <br>
-          <!--  placeholder CAM -->
-          <div class="cam-data-box">
-            <h2>Stan kamery</h2>
-            <div class="disconnected-message">
-              CamService nie zainicjowany ...
-            </div>
-          </div>
-          <br>
-          <div class="timestamp" id="sensor-timestamp">Ostatnia aktualizacja sensorów: --</div>
-        <div style="margin-top: 1em;">
+        <!-- Wspólna sekcja kontroli na dole -->
+        <div class="control-section">
+          <div class="timestamp" id="sensor-timestamp">Ostatnia aktualizacja: --</div>
+          
           <div class="interval-control">
-            <h4>Aktualne odświeżanie</h4>
+            <h4>Interwał odświeżania</h4>
             <div class="incrementer">
-              <button onclick="decreaseInterval()">➖</button>
+              <button onclick="decreaseInterval()">
+                <i data-feather="minus"></i>
+              </button>
               <div>
                 <div class="interval-display" id="interval-display">30s</div>
               </div>
-              <button onclick="increaseInterval()">➕</button>
-          </div> 
-        </div>
-          <h4>Odświeżenie za:</h4>
-            <div id="sensor-refresh">-- s</div>
+              <button onclick="increaseInterval()">
+                <i data-feather="plus"></i>
+              </button>
+            </div>
+            <div style="margin-top: 0.5em; wid">
+              <strong>Odświeżenie za:</strong> <span id="sensor-refresh">-- s</span>
+            </div>
           </div>
-        <button onclick="handleFetchSensorNow()" style="width: 100%; margin-top: 0.5em;">
-          🔄 Odśwież Teraz
-        </button>
-        </div>
 
+          <button onclick="handleFetchSensorNow()" style="margin-top: 1em;">
+            <i data-feather="refresh-cw"></i>
+            Odśwież Teraz
+          </button>
+        </div>
       </div>
 
       <!-- Prawa kolumna -->
-      <div class="card">
+      <div class="card camera-wrapper">
         <h2>Podgląd kamery</h2>
-        <button onclick="startStream()">▶️ Start</button>
-        <button onclick="stopStream()">⏹️ Stop</button>
-        <div id="video-container"></div>
+        <button onclick="startStream()">
+          <i data-feather="play"></i>
+          Start
+        </button>
+        <button onclick="stopStream()">
+          <i data-feather="square"></i>
+          Stop
+        </button>
+        
+        <div id="video-container">
+          <button class="camera-resize-btn" onclick="expandCamera()">
+            <i data-feather="maximize-2"></i>
+          </button>
+        </div>
       </div>
     </div>
   </div>
 
   <script>
+    let cameraExpanded = false;
 
-    // ustawienie koloru tła w zależnościu od stanu
+    function expandCamera() {
+      const videoFeed = document.querySelector('#video-container img');
+      if (!videoFeed) return;
+
+      const overlay = document.getElementById('camera-overlay');
+      const overlayVideo = document.getElementById('overlay-video');
+      const overlayContent = document.getElementById('overlay-content');
+      
+      // Pobierz pozycję oryginalnego obrazu
+      const rect = videoFeed.getBoundingClientRect();
+      
+      // Ustaw początkową pozycję overlay na pozycję oryginalnego obrazu
+      overlayContent.style.left = rect.left + 'px';
+      overlayContent.style.top = rect.top + 'px';
+      overlayContent.style.width = rect.width + 'px';
+      overlayContent.style.height = rect.height + 'px';
+      
+      overlayVideo.src = videoFeed.src;
+      overlay.classList.add('active');
+      cameraExpanded = true;
+      document.body.style.overflow = 'hidden';
+      
+      // Render ikon przed animacją
+      feather.replace();
+      
+      // Animuj powiększenie w tym samym miejscu
+      requestAnimationFrame(() => {
+        overlayContent.style.width = '640px';
+        overlayContent.style.height = '480px';
+      });
+    }
+
+    function shrinkCamera(event) {
+      if (event) {
+        event.stopPropagation();
+        // Jeśli kliknięto w content, nie zamykaj
+        if (event.target.closest('.camera-overlay-content') && !event.target.closest('.camera-resize-btn')) {
+          return;
+        }
+      }
+      
+      const overlay = document.getElementById('camera-overlay');
+      overlay.classList.remove('active');
+      cameraExpanded = false;
+      document.body.style.overflow = 'auto';
+    }
+
+    // ESC key to close
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && cameraExpanded) {
+        shrinkCamera();
+      }
+    });
+
     function setGeneralAlertClass(mode) {
       const box = document.getElementById("general-alerts");
-
       box.classList.remove("card-safe", "card-warning", "card-danger");
-
       if (mode === "safe") box.classList.add("card-safe");
       if (mode === "warning") box.classList.add("card-warning");
       if (mode === "danger") box.classList.add("card-danger");
     }
     
-    // startowe wartości interwałów i zmiennych
     const BASE_REFRESH_INTERVAL = 60;
     let generalRefreshTime = BASE_REFRESH_INTERVAL;
     let sensorRefreshTime = 30;
@@ -252,7 +454,6 @@
     let prevStatus = null;
     let status = 0;
 
-    // format czasu na min i sec
     function formatTime(seconds) {
       if (seconds < 60) return `${seconds}s`;
       const minutes = Math.floor(seconds / 60);
@@ -260,7 +461,6 @@
       return secs > 0 ? `${minutes}m ${secs}s` : `${minutes}m`;
     }
 
-    // zwiększenie interwału na pobieraniu sensorów
     function increaseInterval() {
       if (sensorsInterval < MAX_INTERVAL) {
         sensorsInterval += INTERVAL_STEP;
@@ -269,7 +469,6 @@
       }
     }
 
-    // wyzmniejszenie interwału na pobieraniu sensorów
     function decreaseInterval() {
       if (sensorsInterval > MIN_INTERVAL) {
         sensorsInterval -= INTERVAL_STEP;
@@ -278,13 +477,11 @@
       }
     }
 
-    // wymuszenie pobrania sensorów natychmiast
     function handleFetchSensorNow() {
       fetchSensorsData();
       sensorRefreshTime = sensorsInterval;
     }
 
-    // funkcja fetch do pobrania danych z sensorów
     async function fetchSensorsData() {
       try {
         console.log("[DEBUG] Fetching /api/sensors_status");
@@ -292,7 +489,6 @@
         const data = await res.json();
         console.log("[DEBUG] Sensors data:", data);
 
-        // PIR Servive
         const pirConnected = data.pirData?.pirConnected;
         const pirBox = document.querySelector(".pir-data-box");
         
@@ -301,18 +497,19 @@
             <div class="counter">PIR26: <span id="pir26">${data.pirData?.pir26}</span></div>
             <div class="counter">PIR16: <span id="pir16">${data.pirData?.pir16 ?? 0}</span></div>
             <div id="pir-alarm" class="${data.pirData?.alarmStatus ? 'alarm-on' : 'alarm-off'}">
-              ${data.pirData?.alarmStatus ? '🔴 Brak Ruchu' : '🟢 OK'}
+              ${data.pirData?.alarmStatus ? '<i data-feather="alert-circle"></i> Brak Ruchu' : '<i data-feather="check-circle"></i> OK'}
             </div>
           `;
+          feather.replace();
         } else {
           pirBox.innerHTML = `
             <div class="disconnected-message">
-              ⚠️ Brak połączenia z PirService
+              <i data-feather="wifi-off"></i> Brak połączenia z PirService
             </div>
           `;
+          feather.replace();
         }
 
-        // CAM Service
         const camConnected = data.camData?.camConnected;
         const camBox = document.querySelector(".cam-data-box");
         
@@ -322,19 +519,20 @@
             <div class="counter">Ruch wykryty: <span id="cam-motion">${data.camData?.motionDetected ? 'Tak' : 'Nie'}</span></div>
             <div class="counter">Liczba osób: <span id="cam-people">${data.camData?.peopleCount ?? 0}</span></div>
             <div id="cam-alarm" class="${!data.camData?.motionDetected ? 'alarm-on' : 'alarm-off'}" style="margin-top: 0.5em;">
-              ${!data.camData?.motionDetected ? '🔴 Brak Ruchu' : '🟢 OK'}
+              ${!data.camData?.motionDetected ? '<i data-feather="alert-circle"></i> Brak Ruchu' : '<i data-feather="check-circle"></i> OK'}
             </div>
           `;
+          feather.replace();
         } else {
           camBox.innerHTML = `
             <h2>Stan kamery</h2>
             <div class="disconnected-message">
-              ⚠️ Brak połączenia z CamService
+              <i data-feather="wifi-off"></i> Brak połączenia z CamService
             </div>
           `;
+          feather.replace();
         }
 
-        // Czas aktualizacji
         const sensorTimestamp = document.getElementById("sensor-timestamp");
         if (data.timestamp) {
           const date = new Date(data.timestamp * 1000);
@@ -348,7 +546,6 @@
       }
     }
 
-    // licznik do pobrania danych sensorów
     function sensorsCountdown() {
       document.getElementById("sensor-refresh").textContent = `${sensorRefreshTime}s`;
       sensorRefreshTime--;
@@ -358,7 +555,6 @@
       }
     }
 
-    // usunięcie licznika do alarmu
     function stopWarningCountdown() {
       const el = document.getElementById("warning-countdown");
       if (warningCountdown !== null) {
@@ -368,7 +564,6 @@
       el.textContent = "";
     }
 
-    // licznik ostżeżenia zagrozenia
     function startWarningCountdown(countdown) {
       stopWarningCountdown();
       warningTimer = countdown;
@@ -385,7 +580,6 @@
       }, 1000);
     }
 
-    // funkcja fetch do pobrania stanu zagrożenia
     async function fetchGeneralStatus() {
       try {
         const res = await fetch("/api/general_status");
@@ -425,7 +619,6 @@
       }
     }
 
-    // licznik generalnego odświeżania
     function generalCountdown() {
       if (generalRefreshTime === -1) {
         return;
@@ -436,24 +629,22 @@
       }
     }
 
-    // funkcja fetch do pobierania urzytkowników
     async function fetchUsers() {
       try {
         const res = await fetch("/users");
         const data = await res.json();
         const usersDiv = document.getElementById("users-div");
         
-        // Sprawdź czy CardService jest połączony
         if (!data.cardConnected) {
           usersDiv.innerHTML = `
             <div class="disconnected-message">
-              ⚠️ Brak połączenia z CardService
+              <i data-feather="wifi-off"></i> Brak połączenia z CardService
             </div>
           `;
+          feather.replace();
           return;
         }
         
-        // Jeśli połączony - przywróć normalny widok
         usersDiv.innerHTML = `
           <h3 class="in">Wewnątrz</h3>
           <table id="users-in">
@@ -482,7 +673,7 @@
           detailsRow.style.display = "none";
 
           mainRow.innerHTML = `
-            <td class="arrow">▶️</td>
+            <td class="arrow"><i data-feather="chevron-right"></i></td>
             <td>${u.first_name}</td>
             <td>${u.second_name}</td>
             <td>${u.card_number}</td>
@@ -498,7 +689,9 @@
           mainRow.addEventListener("click", () => {
             const open = detailsRow.style.display === "table-row";
             detailsRow.style.display = open ? "none" : "table-row";
-            mainRow.querySelector(".arrow").textContent = open ? "▶️" : "🔽";
+            const icon = mainRow.querySelector(".arrow i");
+            icon.setAttribute('data-feather', open ? 'chevron-right' : 'chevron-down');
+            feather.replace();
           });
 
           tableBody.appendChild(mainRow);
@@ -507,30 +700,41 @@
 
         data.usersIn.forEach(u => createUserRow(u, usersInBody));
         data.usersOut.forEach(u => createUserRow(u, usersOutBody));
+        
+        feather.replace();
 
       } catch (error) {
         console.error("Błąd pobierania użytkowników:", error);
         const usersDiv = document.getElementById("users-div");
         usersDiv.innerHTML = `
           <div class="disconnected-message">
-            ❌ Błąd połączenia z serwerem
+            <i data-feather="x-circle"></i> Błąd połączenia z serwerem
           </div>
         `;
+        feather.replace();
       }
     }
 
-    // pokazywanie streama
     function startStream() {
-      document.getElementById('video-container').innerHTML =
-        '<img src="/video_feed" style="width:100%;border-radius:10px;">';
+      document.getElementById('video-container').innerHTML = `
+        <img src="/video_feed" style="width:100%;border-radius:10px;">
+        <button class="camera-resize-btn" onclick="expandCamera()">
+          <i data-feather="maximize-2"></i>
+        </button>
+      `;
+      feather.replace();
     }
 
-    // chowanie streama
     function stopStream() {
-      document.getElementById('video-container').innerHTML = '';
+      shrinkCamera();
+      document.getElementById('video-container').innerHTML = `
+        <button class="camera-resize-btn" onclick="expandCamera()">
+          <i data-feather="maximize-2"></i>
+        </button>
+      `;
+      feather.replace();
     }
 
-    // funkcja fetch do restu alrmów
     async function resetAlarm() {
       try {
         console.log("[DEBUG] Resetting alarm via PATCH");
@@ -562,14 +766,16 @@
     
     document.getElementById("reset-btn").addEventListener("click", resetAlarm);
 
-    // Pierwsze pobranie danych
+    // Initialize
     fetchUsers();
     fetchSensorsData();
     fetchGeneralStatus();
     
-    // Uruchom countdowny
     setInterval(generalCountdown, 1000);
     setInterval(sensorsCountdown, 1000);
+    
+    // Replace feather icons on load
+    feather.replace();
   </script>
 </body>
 </html>
