@@ -1,11 +1,9 @@
 Flask
-matplotlib
 pydantic
 pydantic-settings
 PyMySQL
 SQLAlchemy
 typing-extensions
 websocket-client
+numpy
 opencv-python
-tensorflow
-cryptography
