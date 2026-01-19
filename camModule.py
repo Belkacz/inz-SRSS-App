@@ -2,7 +2,6 @@ from datetime import datetime
 import json
 import threading
 import time
-import cv2
 import websocket
 
 class CAMMonitor:
@@ -13,13 +12,16 @@ class CAMMonitor:
         self.active = True
         
         # Zakoduj placeholder raz przy starcie
-        placeholder_img = cv2.imread("stand_by.jpg")
-        if placeholder_img is not None:
-            ret, buffer = cv2.imencode('.jpg', placeholder_img, 
-                                      [cv2.IMWRITE_JPEG_QUALITY, 70])
-            self.placeholder_jpeg = buffer.tobytes() if ret else b''
-        else:
-            self.placeholder_jpeg = b''
+        try:
+            with open("stand_by.jpg", "rb") as placeholder_file:
+                self.placeholder_jpeg = placeholder_file.read()
+            print("[CAMMonitor] Wczytano placeholder", flush=True)
+        except FileNotFoundError:
+            print("[CAMMonitor] Nie znaleziono stand_by.jpg", flush=True)
+            self.placeholder_jpeg = 0
+        except Exception as e:
+            print(f"[CAMMonitor] Błąd wczytywania placeholder: {e}", flush=True)
+            self.placeholder_jpeg = 0
         
         # Startuj z placeholder
         self.stremed_frame = self.placeholder_jpeg

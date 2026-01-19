@@ -5,6 +5,5 @@ PyMySQL
 SQLAlchemy
 typing-extensions
 websocket-client
-numpy
 opencv-python
 cryptography
