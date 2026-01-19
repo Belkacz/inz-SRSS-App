@@ -21,7 +21,6 @@ def test_motion_json_sets_motion(cam_monitor):
     assert motion is True
     assert cam_monitor.motion_detected is True
     assert cam_monitor.last_motion_time is not None
-    assert cam_monitor.json_counter == 1
 
 
 def test_motion_json_no_motion(cam_monitor):

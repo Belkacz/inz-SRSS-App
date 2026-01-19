@@ -12,7 +12,6 @@ def safety():
 
     cam = Mock()
     cam.motion_saftey = False
-    cam.people_count = 0
     cam.stremed_frame = None
 
     card = Mock()

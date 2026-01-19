@@ -47,7 +47,6 @@ def register_routes(app, pir_monitor, safety_monitor, cam_monitor, card_monitor)
             },
             "camData": {
                 "motionDetected": sensors_data['cam_motion'],
-                "peopleCount": sensors_data['people_count'],
                 "camConnected": cam_monitor.cam_connected
             },
             "timestamp": sensors_data["timestamp"]

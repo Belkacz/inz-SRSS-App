@@ -117,7 +117,6 @@ class SafetyMonitor:
         # Dane z czujników (aktualizowane często)
         self.ui_pir26 = 0
         self.ui_pir16 = 0
-        self.ui_people_count = 0
         self.ui_cam_motion = False
         self.total_pir26 = 0
         self.total_pir16 = 0
@@ -161,8 +160,6 @@ class SafetyMonitor:
         pir16 = pir16 if pir16 is not None else 0
         # Pobierz dane kamery (NIE resetuj motion_saftey - to robi tylko reset)
         cam_motion = self.cam_monitor.motion_saftey
-        people_count = self.cam_monitor.people_count
-        self.ui_people_count = people_count
         self.ui_timestamp = time.time()
         self.ui_pir26 += pir26
         self.ui_pir16 += pir16
@@ -184,7 +181,6 @@ class SafetyMonitor:
             "pir26": self.ui_pir26,
             "pir16": self.ui_pir16,
             "cam_motion": self.ui_cam_motion,
-            "people_count": self.ui_people_count,
             "timestamp": self.ui_timestamp,
             "pir_alarm": self.ui_pir26 == 0 and self.ui_pir16 == 0,
             # "cam_alarm": not self.ui_cam_motion
@@ -222,7 +218,6 @@ class SafetyMonitor:
                                 self.card_monitor.users_in,
                                 self.total_pir26,
                                 self.total_pir16,
-                                self.cam_monitor.people_count,
                                 self.cam_monitor.stremed_frame
                             ):
                                 self.email_sent = True
