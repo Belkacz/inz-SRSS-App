@@ -11,17 +11,15 @@ def register_routes(app, pir_monitor, safety_monitor, cam_monitor, card_monitor)
         if request.method == "PATCH":
             data = request.get_json(force=True)
 
-            if data.get("generalReset"):
-
+            if data.get("generalReset") is not True:
+                return jsonify({"status": "invalid_request"}), 400
+            else:
                 safety_monitor.resetData()
                 return jsonify(
                     {
                     "status": "reset_ok",
                     "nextRefreshIn": safety_monitor._main_interval
-                    }
-                )
-
-            return jsonify({"status": "no_action"}), 400
+                    }), 200
 
         # GET – zwracanie statusu
         warning_passed_time = 0

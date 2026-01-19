@@ -44,10 +44,8 @@ class PIRMonitor:
                             data = json.loads(msg)
                             self.pir26Counter = self.pir26Counter + data.get('pir26RisingCounter')
                             self.pir16Counter = self.pir16Counter + data.get('pir16RisingCounter')
-                            # if self.pir26Counter > 99:
-                            #     self.pir26Counter = 99
-                            # if self.pir16Counter > 99:
-                            #     self.pir16Counter = 99
+                            if self.pir26Counter > 999 : self.pir26Counter = 999
+                            if self.pir16Counter > 999 : self.pir16Counter = 999
                         except Exception as json_error:
                             print(f"[PIRMonitor] Bład dekodowania Json: {json_error}")
                     time.sleep(1)

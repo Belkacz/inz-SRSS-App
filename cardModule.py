@@ -109,8 +109,7 @@ class CardMonitor:
                                     self.card_list, db_users
                                 )
                             except Exception as db_error:
-                                import traceback
-                                traceback.print_exc()
+                                print(f"[CardMonitor][BŁĄD] {db_error}", flush=True)
                         except json.JSONDecodeError as error:
                             print(f"[CardMonitor][BŁĄD] {error}", flush=True)
             except Exception as exception:

@@ -21,10 +21,9 @@ Args:
     users_in: lista użytkowników wewnątrz
     pir26: stan odczytu z czujnika pir26
     pir16: stan odczytu z czujnika pir16
-    people_in_danger: liczba osob w zagrożeniu
     frame: klatka z kamery
 """
-def sendAlertEmail(users_in: tuple[list], pir26, pir16, people_in_danger, frame):
+def sendAlertEmail(users_in: tuple[list], pir26, pir16, frame):
     
     users_in_danger = []
     for user in users_in:
@@ -42,7 +41,7 @@ def sendAlertEmail(users_in: tuple[list], pir26, pir16, people_in_danger, frame)
         f"   • PIR26: {pir26} detekcji\n"
         f"   • PIR16: {pir16} detekcji\n"
         f"   • Kamera: Brak ruchu\n"
-        f"   • Liczba osób w obręcbie kamery: {people_in_danger}\n\n"
+        f"   • Liczba osób zagrożonych: {len(users_in_danger)}\n\n"
         "OSOBY NARAŻONE NA NIEBEZPIECZEŃSTWO:\n"
         f"{users_list}\n\n"
         "═══════════════════════════════════════════════════\n"
@@ -183,9 +182,7 @@ class SafetyMonitor:
             "cam_motion": self.ui_cam_motion,
             "timestamp": self.ui_timestamp,
             "pir_alarm": self.ui_pir26 == 0 and self.ui_pir16 == 0,
-            # "cam_alarm": not self.ui_cam_motion
         }
-        print(f"[getSensorData] sensor_data = {sensor_data}")
         self.ui_pir26 = 0
         self.ui_pir16 = 0
         self.ui_cam_motion = False
@@ -220,8 +217,8 @@ class SafetyMonitor:
                                 self.total_pir16,
                                 self.cam_monitor.stremed_frame
                             ):
-                                self.email_sent = True
                                 print("[SafetyMonitor] Mail wysłany pomyślnie", flush=True)
+                                self.email_sent = True
                                 self.main_alert_on = False
                             else:
                                 print("[SafetyMonitor] Nie udało się wysłać maila", flush=True)
