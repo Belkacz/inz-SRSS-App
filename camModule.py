@@ -47,10 +47,10 @@ class CAMMonitor:
             return motion
         except json.JSONDecodeError as jsonError:
             print(f"[CAMMonitor] Błąd parsowania JSON: {jsonError}", flush=True)
-            return False
+            return None
         except Exception as error:
             print(f"[CAMMonitor] Błąd obsługi motion JSON: {error}", flush=True)
-            return False
+            return None
 
     def _ws_listener(self):
         print("[DEBUG] Wątek ws_listener wystartował!", flush=True)
