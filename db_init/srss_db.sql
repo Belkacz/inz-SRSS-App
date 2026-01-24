@@ -103,7 +103,8 @@ CREATE TABLE `user` (
 INSERT INTO `user` (`id`, `card_number`, `first_name`, `second_name`, `email`, `supervisor`, `privilage_id_fk`) VALUES
 (1, 3473812993, 'user1', 'user1Surname', 'test1@gmail.com', 'admin1', 1),
 (2, 3473793399, 'user2', 'user2Surname', 'test2@gmail.com', 'admin1', 1),
-(3, 3473758819, 'user3', 'user3Surname', 'test3@gmail.com', 'admin1', 1);
+(3, 3473758819, 'user3', 'user3Surname', 'test3@gmail.com', 'admin1', 1),
+(3, 3473759500, 'user4', 'user4Surname', 'test4@gmail.com', 'admin1', 1);
 
 --
 -- Indeksy dla zrzutów tabel

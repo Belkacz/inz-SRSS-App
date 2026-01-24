@@ -204,7 +204,7 @@ class SafetyMonitor:
                     if self.warning_time is None and self.status == STATUS.OK:
                         self.warning_time = time.time()
                         # els if do sprawdzenia czasu od zagrożenia dla żółtego ekranu
-                    elif self.warning_time is not None  and iteration_time - self.warning_time > self.warning_interval:
+                    elif self.warning_time is not None and iteration_time - self.warning_time > self.warning_interval:
                         self.status = STATUS.WARNING
                     # warunek dla czasu do alertu i czy w zagrożeniu już wysłaliśmy wiadomość
                     if not self.email_sent and self.warning_time is not None and iteration_time - self.warning_time > self.alert_interval:
