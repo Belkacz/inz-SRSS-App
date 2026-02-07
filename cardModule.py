@@ -60,11 +60,17 @@ class UserHandler:
 
 
 class CardMonitor:
-    def __init__(self, ws_url: str, user_handler: UserHandler) -> None:
+    def __init__(self, ws_url: str, user_handler: UserHandler,
+                 reconnect_delay: float = 5.0, empty_msg_delay:float = 0.1, error_delay: float = 0.5) -> None:
         self.ws_url = ws_url
         self.card_list = []
         self.active = True
         self.connected = False
+        
+        # Timeouty
+        self.reconnect_delay = reconnect_delay
+        self.empty_msg_delay = empty_msg_delay
+        self.error_delay = error_delay
         
         self.user_handler = user_handler
         self.human_in = False
@@ -77,44 +83,43 @@ class CardMonitor:
 
     def startThread(self):
         self.thread.start()
-
+        
     def _ws_listener(self):
-        print("[DEBUG] Wątek ws_listener wystartował!", flush=True)
         while self.active:
             try:
                 ws = websocket.WebSocket()
                 ws.connect(self.ws_url)
                 print(f"[CardMonitor] Połączono z {self.ws_url}")
                 self.connected = True
+                
                 while self.connected:
                     msg = ws.recv()
+                    
                     if not msg:
+                        time.sleep(self.empty_msg_delay)
                         continue
-                    if msg:
-                        try:
-                            data = json.loads(msg)
-                            self.card_list = []
-                            for key, value in data.items():
-                                if re.match(r"card\d+", key) and key != "cardCounter":
-                                    self.card_list.append(value)
-                            
-                            if len(self.card_list) > 0:
-                                self.human_in = True
-                            else:
-                                self.human_in = False
+                    try:
+                        data = json.loads(msg)
+                        self.card_list = []
+                        for key, value in data.items():
+                            if re.match(r"card\d+", key) and key != "cardCounter":
+                                self.card_list.append(value)
+                        
+                        self.human_in = len(self.card_list) > 0
 
-                            try:
-                                db_users = self.user_handler.get_users()
-                                self.users_in, self.users_out = self.user_handler.create_list_in_n_out(
-                                    self.card_list, db_users
-                                )
-                            except Exception as db_error:
-                                print(f"[CardMonitor][BŁĄD] {db_error}", flush=True)
-                        except json.JSONDecodeError as error:
-                            print(f"[CardMonitor][BŁĄD] {error}", flush=True)
+                        try:
+                            db_users = self.user_handler.get_users()
+                            self.users_in, self.users_out = self.user_handler.create_list_in_n_out(
+                                self.card_list, db_users
+                            )
+                        except Exception as db_error:
+                            print(f"[CardMonitor] Błąd bazy danych: {db_error}", flush=True)
+                    except Exception as error:
+                        print(f"[CardMonitor] Błąd przetwarzania: {error}", flush=True)
+                        time.sleep(self.error_delay)
             except Exception as exception:
                 self.users_in, self.users_out = self.user_handler.create_list_in_n_out(
-                                    self.card_list, [])
-                print(f"[CardMonitor] [BŁĄD] {exception}, ponawiam połączenie za 5s...", flush=True)
+                    self.card_list, [])
+                print(f"[CardMonitor] Błąd: {exception}, ponawiam połączenie za {self.reconnect_delay}s...")
                 self.connected = False
-                time.sleep(5)
+                time.sleep(self.reconnect_delay)
