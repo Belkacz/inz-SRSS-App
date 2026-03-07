@@ -517,7 +517,6 @@
           camBox.innerHTML = `
             <h2>Stan kamery</h2>
             <div class="counter">Ruch wykryty: <span id="cam-motion">${data.camData?.motionDetected ? 'Tak' : 'Nie'}</span></div>
-            <div class="counter">Liczba osób: <span id="cam-people">${data.camData?.peopleCount ?? 0}</span></div>
             <div id="cam-alarm" class="${!data.camData?.motionDetected ? 'alarm-on' : 'alarm-off'}" style="margin-top: 0.5em;">
               ${!data.camData?.motionDetected ? '<i data-feather="alert-circle"></i> Brak Ruchu' : '<i data-feather="check-circle"></i> OK'}
             </div>

@@ -59,15 +59,7 @@ def sendAlertEmail(users_in: tuple[list], pir26, pir16, frame):
     
     if frame is not None:
         try:
-            target_width = 854
-            target_height = 480
-            
-            resized_frame = cv2.resize(frame, (target_width, target_height), interpolation=cv2.INTER_AREA)
-            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 85]
-            _, img_encoded = cv2.imencode('.jpg', resized_frame, encode_param)
-            img_bytes = img_encoded.tobytes()
-            
-            image_attachment = MIMEImage(img_bytes, name=f"alarm_{time.strftime('%Y%m%d_%H%M%S')}.jpg")
+            image_attachment = MIMEImage(frame, name=f"alarm_{time.strftime('%Y%m%d_%H%M%S')}.jpg")
             image_attachment.add_header(
                 'Content-Disposition', 
                 'attachment', 
@@ -75,7 +67,7 @@ def sendAlertEmail(users_in: tuple[list], pir26, pir16, frame):
             )
             msg.attach(image_attachment)
             
-            print(f"[SafetyMonitor] Dodano obrazek 854x480 ({len(img_bytes)//1024}KB) do maila", flush=True)
+            print(f"[SafetyMonitor] Dodano obrazek 854x480 ({len(frame)//1024}KB) do maila", flush=True)
         except Exception as error:
             print(f"[SafetyMonitor] Błąd dodawania obrazka: {error}", flush=True)
     else:
