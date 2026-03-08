@@ -3,6 +3,12 @@ import json
 import threading
 import time
 import websocket
+import cv2
+import numpy as np
+
+FRAME_WIDTH  = 640
+FRAME_HEIGHT = 480
+YUYV_SIZE    = FRAME_WIDTH * FRAME_HEIGHT * 2  # 614400 bytes
 
 class CAMMonitor:
     def __init__(self, ws_url: str, reconnect_delay: float = 5.0, empty_msg_delay: float = 0.1, ws_timeout_delay: float = 0.1,) -> None:
@@ -66,17 +72,20 @@ class CAMMonitor:
                             time.sleep(self.empty_msg_delay)
                             continue
                         if isinstance(msg, bytes):
-                            # kopiowanie klatki jpg
-                            if len(msg) > 2 and msg[:2] == bytes([0xff, 0xd8]):
+                            if len(msg) == YUYV_SIZE:
+                                try:
+                                    yuyv = np.frombuffer(msg, dtype=np.uint8).reshape((FRAME_HEIGHT, FRAME_WIDTH, 2))
+                                    _, jpeg = cv2.imencode('.jpg', cv2.cvtColor(yuyv, cv2.COLOR_YUV2BGR_YUYV), [cv2.IMWRITE_JPEG_QUALITY, 85])
+                                    self.stremed_frame = jpeg.tobytes()
+                                except Exception as e:
+                                    print(f"[CAMMonitor] Błąd konwersji YUYV: {e}", flush=True)
+                                    self.no_frame_counter += 1
+                            elif len(msg) > 2 and msg[:2] == bytes([0xff, 0xd8]):
                                 self.no_frame_counter = 0
                                 self.stremed_frame = msg
                             else:
                                 self.no_frame_counter += 1
-                                print("[CAMMonitor] Błędny format klatki", flush=True)
-                                if self.no_frame_counter > 5:
-                                    self.stremed_frame = self.placeholder_jpeg
-                                    if self.no_frame_counter > 99:
-                                        self.no_frame_counter = 31
+                                print(f"[CAMMonitor] Nieznany format, rozmiar: {len(msg)}", flush=True)
                                         
                         elif isinstance(msg, str):
                             # JSON z informacją o ruchu
