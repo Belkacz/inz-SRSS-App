@@ -72,17 +72,13 @@ class CAMMonitor:
                             time.sleep(self.empty_msg_delay)
                             continue
                         if isinstance(msg, bytes):
-                            if len(msg) == YUYV_SIZE:
-                                try:
-                                    yuyv = np.frombuffer(msg, dtype=np.uint8).reshape((FRAME_HEIGHT, FRAME_WIDTH, 2))
-                                    _, jpeg = cv2.imencode('.jpg', cv2.cvtColor(yuyv, cv2.COLOR_YUV2BGR_YUYV), [cv2.IMWRITE_JPEG_QUALITY, 85])
-                                    self.stremed_frame = jpeg.tobytes()
-                                except Exception as e:
-                                    print(f"[CAMMonitor] Błąd konwersji YUYV: {e}", flush=True)
-                                    self.no_frame_counter += 1
-                            elif len(msg) > 2 and msg[:2] == bytes([0xff, 0xd8]):
-                                self.no_frame_counter = 0
-                                self.stremed_frame = msg
+                            try:
+                                yuyv = np.frombuffer(msg, dtype=np.uint8).reshape((FRAME_HEIGHT, FRAME_WIDTH, 2))
+                                _, jpeg = cv2.imencode('.jpg', cv2.cvtColor(yuyv, cv2.COLOR_YUV2BGR_YUYV), [cv2.IMWRITE_JPEG_QUALITY, 85])
+                                self.stremed_frame = jpeg.tobytes()
+                            except Exception as e:
+                                print(f"[CAMMonitor] Błąd konwersji YUYV: {e}", flush=True)
+                                self.no_frame_counter += 1
                             else:
                                 self.no_frame_counter += 1
                                 print(f"[CAMMonitor] Nieznany format, rozmiar: {len(msg)}", flush=True)
